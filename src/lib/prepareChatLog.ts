@@ -3,16 +3,10 @@ import { extractMessageText, isVoiceMessage, isVideoNote, isPhoto, isVideo, isSt
 
 /**
  * Converts raw Telegram message array into an ultra-compact text dialogue log for LLMs.
- * Removes heavy metadata (dimensions, photo thumbs, sticker ids), retaining timestamps, authors, reply targets, and message essence.
- * 
- * Example output:
- * [2024-02-15 14:02] Alex: Hey guys!
- * [2024-02-15 14:03] Maria (in reply to Alex): Hey! How's the project going?
- * [2024-02-15 14:04] Alex: [Voice message, 15s]
+ * Processes 100% of messages without artificial slicing limits.
  */
 export function prepareChatLogForAI(
-  exportData: TelegramExport,
-  maxMessagesLimit = 8000
+  exportData: TelegramExport
 ): { logText: string; totalMessages: number; exportedMessages: number } {
   const allMessages = exportData.messages || []
 
@@ -24,21 +18,15 @@ export function prepareChatLogForAI(
     }
   }
 
-  // Filter significant messages
+  // Filter out empty service actions (keep messages with text, media, or sender)
   const validMessages = allMessages.filter((m) => {
-    if (m.type === 'service' && !m.text) return false
+    if (m.type === 'service' && !m.text && !m.action) return false
     return Boolean(m.from || m.actor || m.text)
   })
 
-  // Take the most recent messages up to the limit
-  const messagesToProcess =
-    validMessages.length > maxMessagesLimit
-      ? validMessages.slice(-maxMessagesLimit)
-      : validMessages
-
   const lines: string[] = []
 
-  for (const msg of messagesToProcess) {
+  for (const msg of validMessages) {
     const author = msg.from || msg.actor || 'Anonymous'
     
     // Short date format: "YYYY-MM-DD HH:mm"
@@ -86,7 +74,7 @@ export function prepareChatLogForAI(
 
   return {
     logText: lines.join('\n'),
-    totalMessages: validMessages.length,
-    exportedMessages: messagesToProcess.length,
+    totalMessages: allMessages.length,
+    exportedMessages: lines.length,
   }
 }
