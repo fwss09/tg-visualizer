@@ -11,11 +11,14 @@ import { MembersLeaderboard } from '@/components/charts/MembersLeaderboard'
 import { MediaBreakdownChart } from '@/components/charts/MediaBreakdownChart'
 import { ChatDynamics } from '@/components/charts/ChatDynamics'
 import { WordAndEmojiCloud } from '@/components/charts/WordAndEmojiCloud'
+import { BarChart3, Sparkles } from 'lucide-react'
+import { AiAnalysisTab } from '@/components/AiAnalysisTab'
 import { analyzeTelegramData } from '@/lib/analyzer'
 import type { TelegramExport } from '@/types/telegram'
 
 export function App() {
   const [rawExportData, setRawExportData] = useState<TelegramExport | null>(null)
+  const [activeTab, setActiveTab] = useState<'charts' | 'ai'>('charts')
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState('')
   const [isExportingImage, setIsExportingImage] = useState(false)
@@ -163,64 +166,105 @@ export function App() {
             loadingMessage={loadingMessage}
           />
         ) : (
-          <div ref={dashboardRef} className="space-y-6 pb-12">
-            {/* Filter Bar */}
-            <FilterBar
-              participants={analyzedData.participants}
-              selectedParticipant={selectedParticipant}
-              onSelectParticipant={setSelectedParticipant}
-              startDateStr={startDateStr}
-              endDateStr={endDateStr}
-              onStartDateChange={setStartDateStr}
-              onEndDateChange={setEndDateStr}
-              onResetFilters={handleResetFilters}
-              hasActiveFilters={hasActiveFilters}
-            />
-
-            {/* Overview KPI Cards */}
-            <OverviewCards summary={analyzedData.summary} />
-
-            {/* Timeline Activity Chart */}
-            <TimelineChart
-              days={analyzedData.timelineDays}
-              weeks={analyzedData.timelineWeeks}
-              months={analyzedData.timelineMonths}
-              participants={analyzedData.participants}
-            />
-
-            {/* Activity Heatmap 7x24 */}
-            <ActivityHeatmap
-              heatmap={analyzedData.heatmap}
-              maxCount={analyzedData.maxHeatmapCount}
-            />
-
-            {/* Members Leaderboard and Media Breakdown Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <MembersLeaderboard
-                  participants={analyzedData.participants}
-                  totalMessages={analyzedData.summary.totalMessages}
-                />
-              </div>
-              <div className="lg:col-span-1">
-                <MediaBreakdownChart
-                  data={analyzedData.mediaBreakdown}
-                  totalMessages={analyzedData.summary.totalMessages}
-                />
+          <div className="space-y-6 pb-12">
+            {/* Tab Switcher */}
+            <div className="flex items-center justify-between border-b border-border/60 pb-3">
+              <div className="inline-flex p-1 rounded-2xl bg-secondary/50 border border-border">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('charts')}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                    activeTab === 'charts'
+                      ? 'bg-card text-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <BarChart3 className="w-4 h-4 text-primary" />
+                  <span>Metrics & Charts</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('ai')}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                    activeTab === 'ai'
+                      ? 'bg-card text-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  <span>AI Insights & Vibe</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-extrabold uppercase tracking-wider">
+                    Gemini
+                  </span>
+                </button>
               </div>
             </div>
 
-            {/* Chat Dynamics: Conversation Starters and Replies */}
-            <ChatDynamics
-              conversationStarters={analyzedData.conversationStarters}
-              replyRelationships={analyzedData.replyRelationships}
-            />
+            {/* Tab 1: Charts Dashboard */}
+            {activeTab === 'charts' ? (
+              <div ref={dashboardRef} className="space-y-6">
+                {/* Filter Bar */}
+                <FilterBar
+                  participants={analyzedData.participants}
+                  selectedParticipant={selectedParticipant}
+                  onSelectParticipant={setSelectedParticipant}
+                  startDateStr={startDateStr}
+                  endDateStr={endDateStr}
+                  onStartDateChange={setStartDateStr}
+                  onEndDateChange={setEndDateStr}
+                  onResetFilters={handleResetFilters}
+                  hasActiveFilters={hasActiveFilters}
+                />
 
-            {/* Emojis and Words Frequency */}
-            <WordAndEmojiCloud
-              emojis={analyzedData.topEmojis}
-              words={analyzedData.topWords}
-            />
+                {/* Overview KPI Cards */}
+                <OverviewCards summary={analyzedData.summary} />
+
+                {/* Timeline Activity Chart */}
+                <TimelineChart
+                  days={analyzedData.timelineDays}
+                  weeks={analyzedData.timelineWeeks}
+                  months={analyzedData.timelineMonths}
+                  participants={analyzedData.participants}
+                />
+
+                {/* Activity Heatmap 7x24 */}
+                <ActivityHeatmap
+                  heatmap={analyzedData.heatmap}
+                  maxCount={analyzedData.maxHeatmapCount}
+                />
+
+                {/* Members Leaderboard and Media Breakdown Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="lg:col-span-2">
+                    <MembersLeaderboard
+                      participants={analyzedData.participants}
+                      totalMessages={analyzedData.summary.totalMessages}
+                    />
+                  </div>
+                  <div className="lg:col-span-1">
+                    <MediaBreakdownChart
+                      data={analyzedData.mediaBreakdown}
+                      totalMessages={analyzedData.summary.totalMessages}
+                    />
+                  </div>
+                </div>
+
+                {/* Chat Dynamics: Conversation Starters and Replies */}
+                <ChatDynamics
+                  conversationStarters={analyzedData.conversationStarters}
+                  replyRelationships={analyzedData.replyRelationships}
+                />
+
+                {/* Emojis and Words Frequency */}
+                <WordAndEmojiCloud
+                  emojis={analyzedData.topEmojis}
+                  words={analyzedData.topWords}
+                />
+              </div>
+            ) : (
+              /* Tab 2: AI Analysis */
+              rawExportData && <AiAnalysisTab rawExportData={rawExportData} />
+            )}
           </div>
         )}
       </main>
