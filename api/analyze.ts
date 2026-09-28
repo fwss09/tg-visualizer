@@ -112,7 +112,8 @@ JSON schema:
     let lastError: string | null = null
 
     for (const model of modelsToTry) {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
+      // Vertex AI Express Mode endpoint for Google Cloud billing
+      const url = `https://aiplatform.googleapis.com/v1/publishers/google/models/${model}:generateContent?key=${apiKey}`
 
       const response = await fetch(url, {
         method: 'POST',
