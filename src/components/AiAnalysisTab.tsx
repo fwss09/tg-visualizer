@@ -26,18 +26,27 @@ interface AiAnalysisTabProps {
   rawExportData: TelegramExport
 }
 
-const SYSTEM_PROMPT = `Ты — беспристрастный, критический аналитик межличностной коммуникации и поведенческих данных.
-Твоя задача — объективный, холодный аудит динамики переписки без эвфемизмов, вежливого сглаживания и романтизации.
+const SYSTEM_PROMPT = `Ты — беспристрастный, опытный аналитик межличностной коммуникации и поведенческих данных.
+Твоя задача — объективный, глубокий аудит динамики переписки без эвфемизмов и романтизации, но с четким пониманием человеческой дружбы.
+
+КРИТИЧЕСКИ ВАЖНОЕ РАЗГРАНИЧЕНИЕ ДРУЖБЫ И РЕАЛЬНОГО ДЕСТРУКТИВА:
+1. Взаимный трэш-ток, сленг, мат и подколы при симметричном участии ОБОИХ участников — это НЕ токсичность, а неформальный дружеский banter (юмор). ЗАПРЕЩЕНО маркировать обоюдный юмор, стеб и самоиронию как "обесценивание" или "токсичность".
+2. Доверительные секреты («боюсь, что расскажешь») и обсуждение глубоких личных переживаний — это нормальная близость и уязвимость, а не «манипуляция» или «шантаж».
+3. Просьбы о поддержке и бытовые вопросы допустимы между друзьями, если нет систематического одностороннего игнорирования чужого «НЕТ».
+4. Реальными Red Flags и манипуляциями считать ТОЛЬКО:
+   - Игру в молчанку или демонстративный холод с целью наказать собеседника (stonewalling);
+   - Систематическое обесценивание успехов и эмоциональное вымогательство;
+   - Перекладывание вины за собственное настроение («ты виноват, что мне грустно», «ты меня не ценишь»);
+   - Нарушение прямо высказанного отказа («хватит», «мне некогда», «я занят»).
 
 Правила анализа:
-1. Запрещено романтизировать токсичность: наигранные обиды, капризы и мини-драмы — это не «милый флирт», а эмоциональный вампиризм и попытка удержания контроля.
-2. Метрики ВСЕГДА рассчитываются отдельно для каждого участника, чтобы объективно отразить баланс/дисбаланс. Если участников двое, один из них — fwss (user_1), а второй — собеседник (user_2).
-3. Оценивай эмоциональную цену (Emotional Cost): сколько усилий и заботы вкладывает один участник, и сколько реальной отдачи (а не формальных смайлов/реакций) дает второй.
-4. Фиксируй реакцию на границы: как собеседник реагирует на фразы «я занят», «мне нужно работать/учиться» (пассивная агрессия, холод, обесценивание, демонстративные закрытия).
-5. Будь строг, опирайся только на факты и точные цитаты из лога.
+1. Не путай живую дружбу с абьюзом: если оба шутят жестко и продолжают диалог на равных — это высокий banter и доверие, а не токсичность.
+2. Метрики рассчитываются отдельно для каждого участника (user_1 = fwss, user_2 = второй участник), отражая реальный баланс вложений.
+3. Оценивай эмоциональную цену (Emotional Cost): сколько искренней заботы вкладывает один, и сколько реальной отдачи дает второй.
+4. Опирайся строго на факты и точные дословные цитаты. Если реальных Red Flags нет, не высасывай их из пальца — массив detected_red_flags может быть пустым или содержать только реальные инциденты.
 
 Язык ответа:
-Пиши текстовые описания (atmosphere_verdict, analysis, ratio_description, pattern_name) на основном языке общения в чате (русский / украинский), сохраняя точный контекст и терминологию, а ключи JSON оставляй строго на английском в соответствии со схемой.
+Пиши текстовые описания (atmosphere_verdict, analysis, ratio_description, pattern_name) на основном языке общения в чате (русский / украинский), сохраняя аутентичный контекст и терминологию, а ключи JSON оставляй строго на английском в соответствии со схемой.
 
 Верни строго валидный JSON-объект без каких-либо markdown-обёрток.
 
@@ -48,15 +57,15 @@ JSON schema:
     "user_1": {
       "name": "fwss",
       "warmth_and_support": 70, // integer 0-100, искренняя забота и интерес к делам
-      "humor_and_banter": 85, // integer 0-100, открытый юмор без скрытых уколов
-      "toxicity_and_manipulation": 15, // integer 0-100, пассивная агрессия, качели, обиды
+      "humor_and_banter": 85, // integer 0-100, открытый юмор и дружеский стеб
+      "toxicity_and_manipulation": 15, // integer 0-100, реальная пассивная агрессия, качели, обиды
       "emotional_investment": 80 // integer 0-100, объем отданной энергии
     },
     "user_2": {
       "name": "string (имя второго участника)",
       "warmth_and_support": 30, // integer 0-100
       "humor_and_banter": 60, // integer 0-100
-      "toxicity_and_manipulation": 75, // integer 0-100
+      "toxicity_and_manipulation": 25, // integer 0-100
       "emotional_investment": 40 // integer 0-100
     }
   },
@@ -66,12 +75,12 @@ JSON schema:
   },
   "detected_red_flags": [
     {
-      "pattern_name": "string (например: Пассивно-агрессивное закрытие диалога, Подвешивание неопределенности)",
+      "pattern_name": "string (только реальные манипуляции: Наказание молчанием, Нарушение границ занятости, Газлайтинг)",
       "quote": "string (дословная цитата из чата)",
-      "analysis": "string (почему это манипулятивный хук)"
+      "analysis": "string (почему это реальный деструктивный паттерн, а не дружеский прикол)"
     }
   ],
-  "boundary_health": "Low" // Low | Medium | High
+  "boundary_health": "High" // Low | Medium | High
 }`
 
 export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) => {
@@ -192,7 +201,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
     try {
       const { logText, exportedMessages } = prepareChatLogForAI(rawExportData)
 
-      setLoadingStep(`Performing objective behavioral audit on ${formatNumber(exportedMessages)} messages...`)
+      setLoadingStep(`Performing calibrated behavioral audit on ${formatNumber(exportedMessages)} messages...`)
 
       let result: AiAnalysisResult
       const trimmedKey = apiKey.trim()
@@ -219,7 +228,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
     const u1 = aiResult.per_user_metrics.user_1
     const u2 = aiResult.per_user_metrics.user_2
 
-    const textToCopy = `📋 CRITICAL COMMUNICATION & BEHAVIORAL AUDIT: "${rawExportData.name || 'Chat'}"
+    const textToCopy = `📋 CALIBRATED COMMUNICATION & BEHAVIORAL AUDIT: "${rawExportData.name || 'Chat'}"
 --------------------------------------------------
 Verdict: ${aiResult.atmosphere_verdict}
 Boundary Health: ${aiResult.boundary_health}
@@ -235,12 +244,14 @@ Dynamics: ${aiResult.reciprocity_balance.primary_drain}
 • Emotional Investment: ${u1.name} (${u1.emotional_investment}%) vs ${u2.name} (${u2.emotional_investment}%)
 
 🚩 DETECTED RED FLAGS & FRICTION POINTS:
-${aiResult.detected_red_flags
-  .map(
-    (flag, idx) =>
-      `${idx + 1}. [${flag.pattern_name}]\n   Quote: «${flag.quote}»\n   Analysis: ${flag.analysis}`
-  )
-  .join('\n\n')}
+${aiResult.detected_red_flags.length > 0
+  ? aiResult.detected_red_flags
+      .map(
+        (flag, idx) =>
+          `${idx + 1}. [${flag.pattern_name}]\n   Quote: «${flag.quote}»\n   Analysis: ${flag.analysis}`
+      )
+      .join('\n\n')
+  : 'None detected (Healthy boundaries & banter)'}
 `
     navigator.clipboard.writeText(textToCopy)
     setIsCopied(true)
@@ -253,7 +264,7 @@ ${aiResult.detected_red_flags
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-xs font-bold border border-emerald-500/20">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Boundary Health: High</span>
+            <span>Boundary Health: Resilient (High)</span>
           </span>
         )
       case 'Medium':
@@ -285,20 +296,20 @@ ${aiResult.detected_red_flags
       {!aiResult && (
         <div className="rounded-3xl border border-border bg-card p-6 sm:p-10 shadow-xs relative overflow-hidden">
           <div className="max-w-2xl mx-auto text-center space-y-4">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/10 text-rose-500 text-xs font-semibold border border-rose-500/20">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold border border-primary/20">
               <ShieldAlert className="w-3.5 h-3.5" />
-              <span>Objective Behavioral & Communication Audit</span>
+              <span>Calibrated Behavioral & Communication Audit</span>
             </div>
 
             <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-foreground">
-              Cold, unromanticized audit of dialogue dynamics
+              Objective audit distinguishing healthy banter from real manipulation
             </h2>
 
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-              Strict analysis of{' '}
+              Audits all{' '}
               <strong className="text-foreground font-semibold">{formatNumber(totalRawMessages)} messages</strong> in{' '}
-              <strong className="text-foreground">«{rawExportData.name || 'Chat'}»</strong>. Computes side-by-side
-              asymmetry, emotional cost vs return, boundary reaction, and manipulative friction patterns without sugar-coating.
+              <strong className="text-foreground">«{rawExportData.name || 'Chat'}»</strong>. Distinguishes consensual
+              humor, swearing, and teasing from genuine red flags (stonewalling, emotional drain, broken boundaries).
             </p>
 
             {/* Custom API Key input toggle */}
@@ -331,7 +342,7 @@ ${aiResult.detected_red_flags
                     />
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    Get a 100% free key at{' '}
+                    Get a free key at{' '}
                     <a
                       href="https://aistudio.google.com/app/apikey"
                       target="_blank"
@@ -373,7 +384,7 @@ ${aiResult.detected_red_flags
                 ) : (
                   <>
                     <ShieldAlert className="w-4 h-4" />
-                    <span>Run Objective Behavioral Audit</span>
+                    <span>Run Calibrated Communication Audit</span>
                   </>
                 )}
               </button>
@@ -396,7 +407,7 @@ ${aiResult.detected_red_flags
                   <span>Communication Audit: «{rawExportData.name || 'Chat'}»</span>
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Unbiased behavioral assessment based on {formatNumber(totalRawMessages)} messages
+                  Calibrated behavioral assessment based on {formatNumber(totalRawMessages)} messages
                 </p>
               </div>
             </div>
@@ -467,7 +478,7 @@ ${aiResult.detected_red_flags
                   <span>Side-by-Side Behavioral Metrics</span>
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Direct asymmetry comparison between conversation participants
+                  Direct asymmetry comparison distinguishing friendly banter from real friction
                 </p>
               </div>
 
@@ -526,7 +537,7 @@ ${aiResult.detected_red_flags
               <div className="space-y-3 p-4 rounded-xl bg-secondary/30 border border-border/40">
                 <div className="flex items-center justify-between text-xs font-semibold text-foreground">
                   <span className="flex items-center gap-1.5">
-                    <Smile className="w-4 h-4 text-amber-500" /> Open Humor & Banter
+                    <Smile className="w-4 h-4 text-amber-500" /> Open Humor & Friendly Banter
                   </span>
                 </div>
 
@@ -563,7 +574,7 @@ ${aiResult.detected_red_flags
               <div className="space-y-3 p-4 rounded-xl bg-secondary/30 border border-border/40">
                 <div className="flex items-center justify-between text-xs font-semibold text-foreground">
                   <span className="flex items-center gap-1.5">
-                    <Flame className="w-4 h-4 text-rose-500" /> Toxicity, Drama & Manipulation
+                    <Flame className="w-4 h-4 text-rose-500" /> Real Toxicity & Manipulation (Not Banter)
                   </span>
                 </div>
 
@@ -600,7 +611,7 @@ ${aiResult.detected_red_flags
               <div className="space-y-3 p-4 rounded-xl bg-secondary/30 border border-border/40">
                 <div className="flex items-center justify-between text-xs font-semibold text-foreground">
                   <span className="flex items-center gap-1.5">
-                    <Zap className="w-4 h-4 text-purple-500" /> Emotional Investment & Effort
+                    <Zap className="w-4 h-4 text-purple-500" /> Emotional Investment & Energy
                   </span>
                 </div>
 
@@ -671,8 +682,9 @@ ${aiResult.detected_red_flags
               ))}
 
               {aiResult.detected_red_flags.length === 0 && (
-                <div className="p-6 text-center text-xs text-muted-foreground rounded-2xl border border-border bg-card">
-                  No overt manipulation or destructive patterns identified.
+                <div className="p-6 text-center text-xs text-muted-foreground rounded-2xl border border-border bg-card flex flex-col items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                  <span>No manipulative red flags detected. Conversation dynamics remain within consensual friendly banter and mutual trust.</span>
                 </div>
               )}
             </div>
