@@ -1,34 +1,33 @@
-export interface AiVibeScore {
-  warmth: number
-  humor: number
-  toxicity: number
-}
-
-export interface AiTopic {
-  topic: string
-  summary: string
-}
-
-export interface AiParticipant {
+export interface UserMetric {
   name: string
-  archetype: string
-  characterAnalysis: string
-  favoriteHabit: string
-  sampleQuote: string
+  warmth_and_support: number // 0-100
+  humor_and_banter: number // 0-100
+  toxicity_and_manipulation: number // 0-100
+  emotional_investment: number // 0-100
 }
 
-export interface AiAward {
-  nomination: string
-  winner: string
-  reason: string
+export interface PerUserMetrics {
+  user_1: UserMetric
+  user_2: UserMetric
 }
+
+export interface ReciprocityBalance {
+  ratio_description: string
+  primary_drain: string
+}
+
+export interface DetectedRedFlag {
+  pattern_name: string
+  quote: string
+  analysis: string
+}
+
+export type BoundaryHealth = 'Low' | 'Medium' | 'High'
 
 export interface AiAnalysisResult {
-  chatVibe: string
-  vibeScore: AiVibeScore
-  dialogueDynamics: string
-  humorAndStyle: string
-  insideJokesAndTopics: AiTopic[]
-  participants: AiParticipant[]
-  funAwards: AiAward[]
+  atmosphere_verdict: string
+  per_user_metrics: PerUserMetrics
+  reciprocity_balance: ReciprocityBalance
+  detected_red_flags: DetectedRedFlag[]
+  boundary_health: BoundaryHealth
 }

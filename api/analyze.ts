@@ -9,7 +9,6 @@ interface RequestBody {
 }
 
 export default async function handler(req: Request): Promise<Response> {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -52,47 +51,52 @@ export default async function handler(req: Request): Promise<Response> {
       )
     }
 
-    const systemPrompt = `You are an expert conversational psychologist, sociologist, and witty dialogue analyst.
-You are provided with a text log export from a Telegram chat titled "${chatName || 'Telegram Chat'}".
-Your goal is to conduct a deep, perceptive, slightly witty, yet friendly analysis of the group dynamics, chat vibe, and key participants.
+    const systemPrompt = `Ты — беспристрастный, критический аналитик межличностной коммуникации и поведенческих данных.
+Твоя задача — объективный, холодный аудит динамики переписки без эвфемизмов, вежливого сглаживания и романтизации.
 
-IMPORTANT LANGUAGE INSTRUCTION:
-Write the textual content (archetypes, descriptions, topics, awards) in the primary language used in the chat (e.g., if the participants speak Russian/Ukrainian, write the analysis in Russian/Ukrainian with their natural slang and flavor; if English, write in English). Keep the JSON keys strictly as requested in the schema.
+Правила анализа:
+1. Запрещено романтизировать токсичность: наигранные обиды, капризы и мини-драмы — это не «милый флирт», а эмоциональный вампиризм и попытка удержания контроля.
+2. Метрики ВСЕГДА рассчитываются отдельно для каждого участника, чтобы объективно отразить баланс/дисбаланс. Если участников двое, один из них — fwss (user_1), а второй — собеседник (user_2).
+3. Оценивай эмоциональную цену (Emotional Cost): сколько усилий и заботы вкладывает один участник, и сколько реальной отдачи (а не формальных смайлов/реакций) дает второй.
+4. Фиксируй реакцию на границы: как собеседник реагирует на фразы «я занят», «мне нужно работать/учиться» (пассивная агрессия, холод, обесценивание, демонстративные закрытия).
+5. Будь строг, опирайся только на факты и точные цитаты из лога.
 
-Return strictly a valid JSON object without any markdown code fences.
+Язык ответа:
+Пиши текстовые описания (atmosphere_verdict, analysis, ratio_description, pattern_name) на основном языке общения в чате (русский / украинский), сохраняя точный контекст и терминологию, а ключи JSON оставляй строго на английском в соответствии со схемой.
 
-JSON format:
+Верни строго валидный JSON-объект без каких-либо markdown-обёрток.
+
+JSON schema:
 {
-  "chatVibe": "Concise summary of the overall atmosphere and vibe (2-3 sentences)",
-  "vibeScore": {
-    "warmth": 85, // warmth, support and bonding from 0 to 100
-    "humor": 90, // humor, banter and meme frequency from 0 to 100
-    "toxicity": 10 // perceived toxicity, sarcasm or friction from 0 to 100
+  "atmosphere_verdict": "string (краткий неромантизированный вердикт о реальном характере динамики)",
+  "per_user_metrics": {
+    "user_1": {
+      "name": "fwss",
+      "warmth_and_support": 70, // integer 0-100, искренняя забота и интерес к делам
+      "humor_and_banter": 85, // integer 0-100, открытый юмор без скрытых уколов
+      "toxicity_and_manipulation": 15, // integer 0-100, пассивная агрессия, качели, обиды
+      "emotional_investment": 80 // integer 0-100, объем отданной энергии
+    },
+    "user_2": {
+      "name": "string (имя второго участника)",
+      "warmth_and_support": 30, // integer 0-100
+      "humor_and_banter": 60, // integer 0-100
+      "toxicity_and_manipulation": 75, // integer 0-100
+      "emotional_investment": 40 // integer 0-100
+    }
   },
-  "dialogueDynamics": "Description of conversation formats: rapid-fire ping-pong, voice-note exchanges, monologues, who supports whom",
-  "humorAndStyle": "Humor style, recurring slang, inside jokes, and linguistic quirks in this group",
-  "insideJokesAndTopics": [
+  "reciprocity_balance": {
+    "ratio_description": "string (соотношение отдачи и потребления внимания)",
+    "primary_drain": "string (кто выступает донором внимания, а кто потребителем)"
+  },
+  "detected_red_flags": [
     {
-      "topic": "Name of recurring topic, event, or inside joke",
-      "summary": "Brief explanation of what it was and why it mattered"
+      "pattern_name": "string (например: Пассивно-агрессивное закрытие диалога, Подвешивание неопределенности)",
+      "quote": "string (дословная цитата из чата)",
+      "analysis": "string (почему это манипулятивный хук)"
     }
   ],
-  "participants": [
-    {
-      "name": "Participant name",
-      "archetype": "Catchy, witty title/role (e.g., 'The Night Philosopher', 'The Voice Note Maestro', 'The Drama Queen')",
-      "characterAnalysis": "Personality and conversational style summary (2-3 sentences)",
-      "favoriteHabit": "Prominent habit (e.g., always sends voice notes, replies with questions, uses CAPS)",
-      "sampleQuote": "Characteristic quote or representative catchphrase from the chat"
-    }
-  ],
-  "funAwards": [
-    {
-      "nomination": "Creative award title (e.g., 'Master of Banter', 'Night Owl of the Year')",
-      "winner": "Winner name",
-      "reason": "Why this participant deserves this award"
-    }
-  ]
+  "boundary_health": "Low" // Low | Medium | High
 }`
 
     const modelsToTry = ['gemini-2.5-flash', 'gemini-3.8-flash']
@@ -108,19 +112,19 @@ JSON format:
           contents: [
             {
               role: 'user',
-              parts: [{ text: `${systemPrompt}\n\nCHAT LOG:\n${chatLog}` }],
+              parts: [{ text: `${systemPrompt}\n\nCHAT TITLE: ${chatName || 'Telegram Chat'}\n\nCHAT LOG:\n${chatLog}` }],
             },
           ],
           generationConfig: {
             responseMimeType: 'application/json',
-            temperature: 0.7,
+            temperature: 0.3, // Более строгая и точная температура без галлюцинаций
             maxOutputTokens: 8192,
           },
         }),
       })
 
       if (response.status === 503 || response.status === 429) {
-        lastError = `Model ${model} is currently overloaded (${response.status})`
+        lastError = `Model ${model} is currently busy (${response.status})`
         continue
       }
 
@@ -157,7 +161,7 @@ JSON format:
 
     return new Response(
       JSON.stringify({
-        error: lastError || 'Failed to receive a valid response from Gemini models. Please try again shortly.',
+        error: lastError || 'Failed to receive a response from Gemini models.',
       }),
       { status: 502, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
     )

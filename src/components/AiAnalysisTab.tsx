@@ -1,22 +1,24 @@
 import React, { useState, useEffect } from 'react'
 import {
-  Sparkles,
+  ShieldAlert,
   Bot,
   Flame,
   Smile,
   Heart,
-  Trophy,
+  Zap,
   Quote,
-  MessageSquare,
+  Scale,
   Key,
   RefreshCw,
   Copy,
   Check,
   AlertTriangle,
-  Lightbulb,
+  ArrowRightLeft,
+  Activity,
+  CheckCircle2,
 } from 'lucide-react'
 import type { TelegramExport } from '@/types/telegram'
-import type { AiAnalysisResult } from '@/types/ai'
+import type { AiAnalysisResult, BoundaryHealth } from '@/types/ai'
 import { prepareChatLogForAI } from '@/lib/prepareChatLog'
 import { formatNumber } from '@/lib/utils'
 
@@ -24,46 +26,52 @@ interface AiAnalysisTabProps {
   rawExportData: TelegramExport
 }
 
-const SYSTEM_PROMPT = `You are an expert conversational psychologist, sociologist, and witty dialogue analyst.
-Your goal is to conduct a deep, perceptive, slightly witty, yet friendly analysis of the group dynamics, chat vibe, and key participants based on their entire conversation history.
+const SYSTEM_PROMPT = `Ты — беспристрастный, критический аналитик межличностной коммуникации и поведенческих данных.
+Твоя задача — объективный, холодный аудит динамики переписки без эвфемизмов, вежливого сглаживания и романтизации.
 
-IMPORTANT LANGUAGE INSTRUCTION:
-Write the textual content (archetypes, descriptions, topics, awards) in the primary language used in the chat (e.g., if the participants speak Russian/Ukrainian, write in Russian/Ukrainian with authentic slang and humor; if English, write in English). Keep the JSON keys strictly as specified in the schema.
+Правила анализа:
+1. Запрещено романтизировать токсичность: наигранные обиды, капризы и мини-драмы — это не «милый флирт», а эмоциональный вампиризм и попытка удержания контроля.
+2. Метрики ВСЕГДА рассчитываются отдельно для каждого участника, чтобы объективно отразить баланс/дисбаланс. Если участников двое, один из них — fwss (user_1), а второй — собеседник (user_2).
+3. Оценивай эмоциональную цену (Emotional Cost): сколько усилий и заботы вкладывает один участник, и сколько реальной отдачи (а не формальных смайлов/реакций) дает второй.
+4. Фиксируй реакцию на границы: как собеседник реагирует на фразы «я занят», «мне нужно работать/учиться» (пассивная агрессия, холод, обесценивание, демонстративные закрытия).
+5. Будь строг, опирайся только на факты и точные цитаты из лога.
 
-Return strictly a valid JSON object without any markdown code fences.
+Язык ответа:
+Пиши текстовые описания (atmosphere_verdict, analysis, ratio_description, pattern_name) на основном языке общения в чате (русский / украинский), сохраняя точный контекст и терминологию, а ключи JSON оставляй строго на английском в соответствии со схемой.
 
-JSON format:
+Верни строго валидный JSON-объект без каких-либо markdown-обёрток.
+
+JSON schema:
 {
-  "chatVibe": "Concise summary of the overall atmosphere and vibe (2-3 sentences)",
-  "vibeScore": {
-    "warmth": 85, // warmth, support and bonding from 0 to 100
-    "humor": 90, // humor, banter and meme frequency from 0 to 100
-    "toxicity": 10 // perceived toxicity, sarcasm or friction from 0 to 100
+  "atmosphere_verdict": "string (краткий неромантизированный вердикт о реальном характере динамики)",
+  "per_user_metrics": {
+    "user_1": {
+      "name": "fwss",
+      "warmth_and_support": 70, // integer 0-100, искренняя забота и интерес к делам
+      "humor_and_banter": 85, // integer 0-100, открытый юмор без скрытых уколов
+      "toxicity_and_manipulation": 15, // integer 0-100, пассивная агрессия, качели, обиды
+      "emotional_investment": 80 // integer 0-100, объем отданной энергии
+    },
+    "user_2": {
+      "name": "string (имя второго участника)",
+      "warmth_and_support": 30, // integer 0-100
+      "humor_and_banter": 60, // integer 0-100
+      "toxicity_and_manipulation": 75, // integer 0-100
+      "emotional_investment": 40 // integer 0-100
+    }
   },
-  "dialogueDynamics": "Description of conversation formats: rapid-fire ping-pong, voice-note exchanges, monologues, who supports whom",
-  "humorAndStyle": "Humor style, recurring slang, inside jokes, and linguistic quirks in this group",
-  "insideJokesAndTopics": [
+  "reciprocity_balance": {
+    "ratio_description": "string (соотношение отдачи и потребления внимания)",
+    "primary_drain": "string (кто выступает донором внимания, а кто потребителем)"
+  },
+  "detected_red_flags": [
     {
-      "topic": "Name of recurring topic, event, or inside joke",
-      "summary": "Brief explanation of what it was and why it mattered"
+      "pattern_name": "string (например: Пассивно-агрессивное закрытие диалога, Подвешивание неопределенности)",
+      "quote": "string (дословная цитата из чата)",
+      "analysis": "string (почему это манипулятивный хук)"
     }
   ],
-  "participants": [
-    {
-      "name": "Participant name",
-      "archetype": "Catchy, witty title/role (e.g., 'The Night Philosopher', 'The Voice Note Maestro', 'The Drama Queen')",
-      "characterAnalysis": "Personality and conversational style summary (2-3 sentences)",
-      "favoriteHabit": "Prominent habit (e.g., always sends voice notes, replies with questions, uses CAPS)",
-      "sampleQuote": "Characteristic quote or representative catchphrase from the chat"
-    }
-  ],
-  "funAwards": [
-    {
-      "nomination": "Creative award title (e.g., 'Master of Banter', 'Night Owl of the Year')",
-      "winner": "Winner name",
-      "reason": "Why this participant deserves this award"
-    }
-  ]
+  "boundary_health": "Low" // Low | Medium | High
 }`
 
 export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) => {
@@ -90,7 +98,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
     localStorage.setItem('tg_gemini_api_key', key)
   }
 
-  // Direct client-side call to Google Gemini API (completely eliminates Vercel 10s Serverless timeout!)
+  // Direct client-side call to Google Gemini API (bypasses Vercel 10s Serverless timeout)
   const callGeminiDirect = async (cleanLog: string, keyToUse: string): Promise<AiAnalysisResult> => {
     const modelsToTry = ['gemini-2.5-flash', 'gemini-3.8-flash']
     let lastError: string | null = null
@@ -110,7 +118,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
           ],
           generationConfig: {
             responseMimeType: 'application/json',
-            temperature: 0.7,
+            temperature: 0.3,
             maxOutputTokens: 8192,
           },
         }),
@@ -179,19 +187,17 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
   const runAnalysis = async () => {
     setIsLoading(true)
     setError(null)
-    setLoadingStep('Formatting and packing 100% of messages...')
+    setLoadingStep('Formatting and packing 100% of messages for audit...')
 
     try {
-      // 1. Prepare chat log - 100% of messages
       const { logText, exportedMessages } = prepareChatLogForAI(rawExportData)
 
-      setLoadingStep(`Sending all ${formatNumber(exportedMessages)} messages to Gemini...`)
+      setLoadingStep(`Performing objective behavioral audit on ${formatNumber(exportedMessages)} messages...`)
 
       let result: AiAnalysisResult
-
       const trimmedKey = apiKey.trim()
       if (trimmedKey) {
-        setLoadingStep(`Gemini is reading all ${formatNumber(exportedMessages)} messages (direct stream)...`)
+        setLoadingStep(`Gemini 2.5 Flash auditing ${formatNumber(exportedMessages)} messages directly...`)
         result = await callGeminiDirect(logText, trimmedKey)
       } else {
         setLoadingStep('Calling backend analyzer...')
@@ -210,32 +216,68 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
 
   const handleCopyReport = () => {
     if (!aiResult) return
-    const textToCopy = `✨ AI ANALYSIS REPORT: "${rawExportData.name || 'Telegram Chat'}"
-------------------------------------
-Vibe: ${aiResult.chatVibe}
+    const u1 = aiResult.per_user_metrics.user_1
+    const u2 = aiResult.per_user_metrics.user_2
 
-Vibe Score:
-❤️ Warmth & Support: ${aiResult.vibeScore.warmth}%
-😄 Humor & Banter: ${aiResult.vibeScore.humor}%
-🌶️ Toxicity & Sarcasm: ${aiResult.vibeScore.toxicity}%
+    const textToCopy = `📋 CRITICAL COMMUNICATION & BEHAVIORAL AUDIT: "${rawExportData.name || 'Chat'}"
+--------------------------------------------------
+Verdict: ${aiResult.atmosphere_verdict}
+Boundary Health: ${aiResult.boundary_health}
 
-👥 Participants:
-${aiResult.participants
+⚖️ RECIPROCITY BALANCE:
+Ratio: ${aiResult.reciprocity_balance.ratio_description}
+Dynamics: ${aiResult.reciprocity_balance.primary_drain}
+
+📊 COMPARATIVE METRICS (${u1.name} vs ${u2.name}):
+• Warmth & Support: ${u1.name} (${u1.warmth_and_support}%) vs ${u2.name} (${u2.warmth_and_support}%)
+• Humor & Banter: ${u1.name} (${u1.humor_and_banter}%) vs ${u2.name} (${u2.humor_and_banter}%)
+• Toxicity & Manipulation: ${u1.name} (${u1.toxicity_and_manipulation}%) vs ${u2.name} (${u2.toxicity_and_manipulation}%)
+• Emotional Investment: ${u1.name} (${u1.emotional_investment}%) vs ${u2.name} (${u2.emotional_investment}%)
+
+🚩 DETECTED RED FLAGS & FRICTION POINTS:
+${aiResult.detected_red_flags
   .map(
-    (p) =>
-      `• ${p.name} — «${p.archetype}»\n  ${p.characterAnalysis}\n  Habit: ${p.favoriteHabit}\n  Quote: ${p.sampleQuote}`
+    (flag, idx) =>
+      `${idx + 1}. [${flag.pattern_name}]\n   Quote: «${flag.quote}»\n   Analysis: ${flag.analysis}`
   )
   .join('\n\n')}
-
-🏆 Fun Awards:
-${aiResult.funAwards.map((a) => `• ${a.nomination}: ${a.winner} (${a.reason})`).join('\n')}
 `
     navigator.clipboard.writeText(textToCopy)
     setIsCopied(true)
     setTimeout(() => setIsCopied(false), 2000)
   }
 
+  const getBoundaryHealthBadge = (health: BoundaryHealth) => {
+    switch (health) {
+      case 'High':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-xs font-bold border border-emerald-500/20">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Boundary Health: High</span>
+          </span>
+        )
+      case 'Medium':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-500 text-xs font-bold border border-amber-500/20">
+            <Activity className="w-3.5 h-3.5" />
+            <span>Boundary Health: Moderate</span>
+          </span>
+        )
+      case 'Low':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/10 text-rose-500 text-xs font-bold border border-rose-500/20">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>Boundary Health: Vulnerable (Low)</span>
+          </span>
+        )
+    }
+  }
+
   const totalRawMessages = rawExportData.messages?.length || 0
+
+  const user1 = aiResult?.per_user_metrics?.user_1
+  const user2 = aiResult?.per_user_metrics?.user_2
 
   return (
     <div className="space-y-6 pb-12 animate-fade-in">
@@ -243,20 +285,20 @@ ${aiResult.funAwards.map((a) => `• ${a.nomination}: ${a.winner} (${a.reason})`
       {!aiResult && (
         <div className="rounded-3xl border border-border bg-card p-6 sm:p-10 shadow-xs relative overflow-hidden">
           <div className="max-w-2xl mx-auto text-center space-y-4">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold border border-primary/20">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Full-History AI Psychoanalysis (Gemini)</span>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500/10 text-rose-500 text-xs font-semibold border border-rose-500/20">
+              <ShieldAlert className="w-3.5 h-3.5" />
+              <span>Objective Behavioral & Communication Audit</span>
             </div>
 
             <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-foreground">
-              Uncover the real vibe, dynamics & archetypes
+              Cold, unromanticized audit of dialogue dynamics
             </h2>
 
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-              Gemini will read through all{' '}
+              Strict analysis of{' '}
               <strong className="text-foreground font-semibold">{formatNumber(totalRawMessages)} messages</strong> in{' '}
-              <strong className="text-foreground">«{rawExportData.name || 'Chat'}»</strong> to evaluate toxicity,
-              craft witty participant dossiers with iconic quotes, and extract recurring inside jokes.
+              <strong className="text-foreground">«{rawExportData.name || 'Chat'}»</strong>. Computes side-by-side
+              asymmetry, emotional cost vs return, boundary reaction, and manipulative friction patterns without sugar-coating.
             </p>
 
             {/* Custom API Key input toggle */}
@@ -270,7 +312,7 @@ ${aiResult.funAwards.map((a) => `• ${a.nomination}: ${a.winner} (${a.reason})`
                 <span>
                   {apiKey
                     ? `Using API Key (${apiKey.slice(0, 4)}...${apiKey.slice(-4)})`
-                    : 'Enter your Gemini API Key (runs directly in browser, no timeout)'}
+                    : 'Enter Gemini API Key (runs directly in browser, no timeout)'}
                 </span>
               </button>
 
@@ -298,7 +340,7 @@ ${aiResult.funAwards.map((a) => `• ${a.nomination}: ${a.winner} (${a.reason})`
                     >
                       Google AI Studio
                     </a>
-                    . Directly queried from your browser with zero 10s server timeout limits.
+                    . Queried directly from your browser with zero 10s server timeout limits.
                   </p>
                 </div>
               )}
@@ -309,7 +351,7 @@ ${aiResult.funAwards.map((a) => `• ${a.nomination}: ${a.winner} (${a.reason})`
               <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/20 text-destructive text-xs text-left flex items-start gap-2.5">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="font-semibold">Analysis failed:</p>
+                  <p className="font-semibold">Audit failed:</p>
                   <p className="opacity-90">{error}</p>
                 </div>
               </div>
@@ -326,12 +368,12 @@ ${aiResult.funAwards.map((a) => `• ${a.nomination}: ${a.winner} (${a.reason})`
                 {isLoading ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>{loadingStep || 'Analyzing all messages...'}</span>
+                    <span>{loadingStep || 'Auditing communications...'}</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Analyze All Messages with AI</span>
+                    <ShieldAlert className="w-4 h-4" />
+                    <span>Run Objective Behavioral Audit</span>
                   </>
                 )}
               </button>
@@ -341,20 +383,20 @@ ${aiResult.funAwards.map((a) => `• ${a.nomination}: ${a.winner} (${a.reason})`
       )}
 
       {/* 2. Analysis Results View */}
-      {aiResult && (
+      {aiResult && user1 && user2 && (
         <div className="space-y-6">
           {/* Header Action Bar */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-card p-4 rounded-2xl border border-border shadow-xs">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-xl bg-primary/10 text-primary">
                 <Bot className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-foreground text-sm sm:text-base">
-                  Conversational Insights: «{rawExportData.name || 'Chat'}»
+                <h3 className="font-bold text-foreground text-sm sm:text-base flex items-center gap-2">
+                  <span>Communication Audit: «{rawExportData.name || 'Chat'}»</span>
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Analyzed {formatNumber(totalRawMessages)} messages using Gemini 2.5 Flash
+                  Unbiased behavioral assessment based on {formatNumber(totalRawMessages)} messages
                 </p>
               </div>
             </div>
@@ -366,7 +408,7 @@ ${aiResult.funAwards.map((a) => `• ${a.nomination}: ${a.winner} (${a.reason})`
                 className="flex-1 sm:flex-initial px-3.5 py-1.5 rounded-xl border border-border bg-secondary text-secondary-foreground text-xs font-semibold hover:bg-secondary/80 transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{isCopied ? 'Copied!' : 'Copy Report'}</span>
+                <span>{isCopied ? 'Copied!' : 'Copy Audit'}</span>
               </button>
 
               <button
@@ -376,188 +418,265 @@ ${aiResult.funAwards.map((a) => `• ${a.nomination}: ${a.winner} (${a.reason})`
                 className="px-3.5 py-1.5 rounded-xl border border-border bg-secondary text-secondary-foreground text-xs font-semibold hover:bg-secondary/80 transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                <span>Refresh</span>
+                <span>Re-Audit</span>
               </button>
             </div>
           </div>
 
-          {/* Vibe Score Indicators */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Warmth */}
-            <div className="p-5 rounded-2xl border border-border bg-card shadow-xs space-y-2">
-              <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
-                <span className="flex items-center gap-1.5 text-rose-500">
-                  <Heart className="w-4 h-4 fill-rose-500" /> Warmth & Support
-                </span>
-                <span className="text-foreground text-base font-extrabold">
-                  {aiResult.vibeScore.warmth}%
-                </span>
-              </div>
-              <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-rose-500 h-full rounded-full transition-all duration-700"
-                  style={{ width: `${aiResult.vibeScore.warmth}%` }}
-                />
-              </div>
+          {/* Verdict and Boundary Health Banner */}
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
+                <ShieldAlert className="w-4 h-4" /> Dynamics & Atmosphere Verdict
+              </h4>
+              {getBoundaryHealthBadge(aiResult.boundary_health)}
             </div>
 
-            {/* Humor */}
-            <div className="p-5 rounded-2xl border border-border bg-card shadow-xs space-y-2">
-              <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
-                <span className="flex items-center gap-1.5 text-amber-500">
-                  <Smile className="w-4 h-4" /> Humor & Banter
-                </span>
-                <span className="text-foreground text-base font-extrabold">
-                  {aiResult.vibeScore.humor}%
-                </span>
-              </div>
-              <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-amber-500 h-full rounded-full transition-all duration-700"
-                  style={{ width: `${aiResult.vibeScore.humor}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Toxicity / Sarcasm */}
-            <div className="p-5 rounded-2xl border border-border bg-card shadow-xs space-y-2">
-              <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground">
-                <span className="flex items-center gap-1.5 text-purple-500">
-                  <Flame className="w-4 h-4" /> Toxicity & Sarcasm
-                </span>
-                <span className="text-foreground text-base font-extrabold">
-                  {aiResult.vibeScore.toxicity}%
-                </span>
-              </div>
-              <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
-                <div
-                  className="bg-purple-500 h-full rounded-full transition-all duration-700"
-                  style={{ width: `${aiResult.vibeScore.toxicity}%` }}
-                />
-              </div>
-            </div>
+            <p className="text-sm sm:text-base text-foreground/95 leading-relaxed font-medium">
+              {aiResult.atmosphere_verdict}
+            </p>
           </div>
 
-          {/* Vibe Overview Card */}
+          {/* Reciprocity Balance */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-xs space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5" /> Overall Chat Atmosphere
+            <div className="rounded-2xl border border-border bg-card p-5 shadow-xs space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+                <ArrowRightLeft className="w-4 h-4" /> Attention Ratio & Reciprocity
               </h4>
-              <p className="text-sm text-foreground/90 leading-relaxed font-medium">
-                {aiResult.chatVibe}
+              <p className="text-sm text-foreground/90 leading-relaxed">
+                {aiResult.reciprocity_balance.ratio_description}
               </p>
             </div>
 
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-xs space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-500 flex items-center gap-1.5">
-                <MessageSquare className="w-3.5 h-3.5" /> Dialogue Dynamics & Flow
+            <div className="rounded-2xl border border-border bg-card p-5 shadow-xs space-y-2">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-rose-500 flex items-center gap-1.5">
+                <Zap className="w-4 h-4" /> Energy Drain & Donor Dynamics
               </h4>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                {aiResult.dialogueDynamics}
+                {aiResult.reciprocity_balance.primary_drain}
               </p>
             </div>
           </div>
 
-          {/* Participant Dossiers */}
-          <div className="space-y-3">
-            <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-              <Bot className="w-5 h-5 text-primary" />
-              <span>Participant Dossiers & Archetypes</span>
-            </h3>
+          {/* Side-by-Side Comparative Metrics */}
+          <div className="rounded-2xl border border-border bg-card p-6 shadow-xs space-y-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Scale className="w-5 h-5 text-primary" />
+                  <span>Side-by-Side Behavioral Metrics</span>
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Direct asymmetry comparison between conversation participants
+                </p>
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {aiResult.participants.map((person, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-2xl border border-border bg-card p-5 shadow-xs flex flex-col justify-between space-y-3 hover:border-primary/40 transition-colors"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <h4 className="font-extrabold text-foreground text-base">{person.name}</h4>
-                      <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-semibold border border-primary/20">
-                        {person.archetype}
-                      </span>
+              {/* Legend */}
+              <div className="flex items-center gap-4 text-xs font-bold">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-blue-500" />
+                  <span className="text-foreground">{user1.name}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-full bg-rose-500" />
+                  <span className="text-foreground">{user2.name}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* 1. Warmth & Support */}
+              <div className="space-y-3 p-4 rounded-xl bg-secondary/30 border border-border/40">
+                <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Heart className="w-4 h-4 text-emerald-500" /> Sincere Warmth & Support
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-semibold text-blue-500">{user1.name}</span>
+                      <span className="font-bold text-foreground">{user1.warmth_and_support}%</span>
                     </div>
-
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {person.characterAnalysis}
-                    </p>
-
-                    <div className="text-xs text-foreground/80 flex items-start gap-1.5 pt-1">
-                      <Lightbulb className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                      <span>
-                        <strong>Habit:</strong> {person.favoriteHabit}
-                      </span>
+                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-blue-500 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${user1.warmth_and_support}%` }}
+                      />
                     </div>
                   </div>
 
-                  {person.sampleQuote && (
-                    <div className="p-3 rounded-xl bg-secondary/50 border border-border/60 text-xs italic text-foreground/90 flex items-start gap-2">
-                      <Quote className="w-4 h-4 text-primary shrink-0 opacity-60" />
-                      <span>«{person.sampleQuote.replace(/^«|»$/g, '')}»</span>
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-semibold text-rose-500">{user2.name}</span>
+                      <span className="font-bold text-foreground">{user2.warmth_and_support}%</span>
                     </div>
-                  )}
+                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-rose-500 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${user2.warmth_and_support}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
-              ))}
+              </div>
+
+              {/* 2. Humor & Banter */}
+              <div className="space-y-3 p-4 rounded-xl bg-secondary/30 border border-border/40">
+                <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Smile className="w-4 h-4 text-amber-500" /> Open Humor & Banter
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-semibold text-blue-500">{user1.name}</span>
+                      <span className="font-bold text-foreground">{user1.humor_and_banter}%</span>
+                    </div>
+                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-blue-500 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${user1.humor_and_banter}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-semibold text-rose-500">{user2.name}</span>
+                      <span className="font-bold text-foreground">{user2.humor_and_banter}%</span>
+                    </div>
+                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-rose-500 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${user2.humor_and_banter}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Toxicity & Manipulation */}
+              <div className="space-y-3 p-4 rounded-xl bg-secondary/30 border border-border/40">
+                <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Flame className="w-4 h-4 text-rose-500" /> Toxicity, Drama & Manipulation
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-semibold text-blue-500">{user1.name}</span>
+                      <span className="font-bold text-foreground">{user1.toxicity_and_manipulation}%</span>
+                    </div>
+                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-blue-500 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${user1.toxicity_and_manipulation}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-semibold text-rose-500">{user2.name}</span>
+                      <span className="font-bold text-foreground">{user2.toxicity_and_manipulation}%</span>
+                    </div>
+                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-rose-500 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${user2.toxicity_and_manipulation}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Emotional Investment */}
+              <div className="space-y-3 p-4 rounded-xl bg-secondary/30 border border-border/40">
+                <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Zap className="w-4 h-4 text-purple-500" /> Emotional Investment & Effort
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-semibold text-blue-500">{user1.name}</span>
+                      <span className="font-bold text-foreground">{user1.emotional_investment}%</span>
+                    </div>
+                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-blue-500 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${user1.emotional_investment}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-semibold text-rose-500">{user2.name}</span>
+                      <span className="font-bold text-foreground">{user2.emotional_investment}%</span>
+                    </div>
+                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-rose-500 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${user2.emotional_investment}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Inside Jokes and Recurring Topics */}
-          {aiResult.insideJokesAndTopics && aiResult.insideJokesAndTopics.length > 0 && (
-            <div className="space-y-3">
+          {/* Detected Red Flags & Friction Points */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                <Smile className="w-5 h-5 text-amber-500" />
-                <span>Inside Jokes & Recurring Topics</span>
+                <ShieldAlert className="w-5 h-5 text-rose-500" />
+                <span>Detected Red Flags & Friction Points ({aiResult.detected_red_flags.length})</span>
               </h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {aiResult.insideJokesAndTopics.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="p-4 rounded-2xl border border-border bg-card shadow-xs space-y-1.5"
-                  >
-                    <span className="text-xs font-bold text-primary block">{item.topic}</span>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{item.summary}</p>
-                  </div>
-                ))}
-              </div>
             </div>
-          )}
 
-          {/* Fun Awards */}
-          {aiResult.funAwards && aiResult.funAwards.length > 0 && (
             <div className="space-y-3">
-              <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-amber-500" />
-                <span>Fun Chat Awards</span>
-              </h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {aiResult.funAwards.map((award, idx) => (
-                  <div
-                    key={idx}
-                    className="p-4 rounded-2xl border border-border/80 bg-gradient-to-br from-card to-secondary/30 shadow-xs flex items-start gap-3"
-                  >
-                    <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500 shrink-0">
-                      <Trophy className="w-4 h-4" />
-                    </div>
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-xs text-foreground">{award.nomination}</span>
-                      </div>
-                      <div className="text-xs font-semibold text-primary">
-                        Winner: {award.winner}
-                      </div>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        {award.reason}
-                      </p>
-                    </div>
+              {aiResult.detected_red_flags.map((flag, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-2xl border border-rose-500/20 bg-card p-5 shadow-xs space-y-3 hover:border-rose-500/40 transition-colors"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="px-3 py-1 rounded-full bg-rose-500/10 text-rose-500 font-bold text-xs border border-rose-500/20">
+                      {flag.pattern_name}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground font-mono">Case #{idx + 1}</span>
                   </div>
-                ))}
-              </div>
+
+                  {flag.quote && (
+                    <div className="p-3 rounded-xl bg-secondary/50 border border-border/60 text-xs italic text-foreground flex items-start gap-2.5">
+                      <Quote className="w-4 h-4 text-rose-500 shrink-0 opacity-70 mt-0.5" />
+                      <span className="font-medium">«{flag.quote.replace(/^«|»$/g, '')}»</span>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    <strong className="text-foreground">Analysis:</strong> {flag.analysis}
+                  </p>
+                </div>
+              ))}
+
+              {aiResult.detected_red_flags.length === 0 && (
+                <div className="p-6 text-center text-xs text-muted-foreground rounded-2xl border border-border bg-card">
+                  No overt manipulation or destructive patterns identified.
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>
