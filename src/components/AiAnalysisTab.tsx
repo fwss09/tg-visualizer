@@ -109,7 +109,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
 
   // Direct client-side call to Google Gemini API (bypasses Vercel 10s Serverless timeout)
   const callGeminiDirect = async (cleanLog: string, keyToUse: string): Promise<AiAnalysisResult> => {
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-3.8-flash']
+    const modelsToTry = ['gemini-2.5-pro', 'gemini-2.5-flash']
     let lastError: string | null = null
 
     for (const model of modelsToTry) {
@@ -128,7 +128,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
           ],
           generationConfig: {
             responseMimeType: 'application/json',
-            temperature: 0.3,
+            temperature: 0.7,
             maxOutputTokens: 8192,
           },
         }),
@@ -207,7 +207,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
       let result: AiAnalysisResult
       const trimmedKey = apiKey.trim()
       if (trimmedKey) {
-        setLoadingStep(`Gemini 2.5 Flash auditing ${formatNumber(exportedMessages)} messages directly...`)
+        setLoadingStep(`Gemini 2.5 Pro auditing ${formatNumber(exportedMessages)} messages directly...`)
         result = await callGeminiDirect(logText, trimmedKey)
       } else {
         setLoadingStep('Calling backend analyzer...')

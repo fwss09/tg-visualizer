@@ -108,7 +108,7 @@ JSON schema:
   "boundary_health": "High" // Low | Medium | High
 }`
 
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-3.8-flash']
+    const modelsToTry = ['gemini-2.5-pro', 'gemini-2.5-flash']
     let lastError: string | null = null
 
     for (const model of modelsToTry) {
@@ -127,7 +127,7 @@ JSON schema:
           ],
           generationConfig: {
             responseMimeType: 'application/json',
-            temperature: 0.3,
+            temperature: 0.7,
             maxOutputTokens: 8192,
           },
         }),
