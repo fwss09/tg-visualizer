@@ -17,11 +17,18 @@ import {
   Activity,
   CheckCircle2,
   Sparkles,
+  Award,
+  Crown,
+  MessageSquare,
+  Repeat,
+  Compass,
 } from 'lucide-react'
 import type { TelegramExport } from '@/types/telegram'
-import type { AiAnalysisResult, BoundaryHealth } from '@/types/ai'
+import type { AiAnalysisResult, BoundaryHealth, ParticipantMetrics } from '@/types/ai'
 import { prepareChatLogForAI } from '@/lib/prepareChatLog'
 import { formatNumber } from '@/lib/utils'
+import { SYSTEM_PROMPT } from '@/lib/aiPrompt'
+import { parseAiAnalysisJson } from '@/lib/aiParser'
 import {
   Select,
   SelectContent,
@@ -36,87 +43,18 @@ interface AiAnalysisTabProps {
   rawExportData: TelegramExport
 }
 
-const SYSTEM_PROMPT = `Ты — беспристрастный, опытный аналитик межличностной коммуникации и поведенческих данных.
-Твоя задача — объективный, глубокий аудит динамики переписки без эвфемизмов и романтизации, но с четким пониманием человеческой дружбы.
-
-КРИТИЧЕСКИ ВАЖНОЕ РАЗГРАНИЧЕНИЕ ДРУЖБЫ И РЕАЛЬНОГО ДЕСТРУКТИВА:
-1. Взаимный трэш-ток, сленг, мат и подколы при симметричном участии ОБОИХ участников — это НЕ токсичность, а неформальный дружеский banter (юмор). ЗАПРЕЩЕНО маркировать обоюдный юмор, стеб и самоиронию как "обесценивание" или "токсичность".
-2. Доверительные секреты («боюсь, что расскажешь») и обсуждение глубоких личных переживаний — это нормальная близость и уязвимость, а не «манипуляция» или «шантаж».
-3. Просьбы о поддержке и бытовые вопросы допустимы между друзьями, если нет систематического одностороннего игнорирования чужого «НЕТ».
-4. Реальными Red Flags и манипуляциями считать ТОЛЬКО:
-   - Игру в молчанку или демонстративный холод с целью наказать собеседника (stonewalling);
-   - Систематическое обесценивание успехов и эмоциональное вымогательство;
-   - Перекладывание вины за собственное настроение («ты виноват, что мне грустно», «ты меня не ценишь»);
-   - Нарушение прямо высказанного отказа («хватит», «мне некогда», «я занят»).
-
-Правила анализа:
-1. Не путай живую дружбу с абьюзом: если оба шутят жестко и продолжают диалог на равных — это высокий banter и доверие, а не токсичность.
-2. Метрики рассчитываются отдельно для каждого участника (user_1 = fwss, user_2 = второй участник), отражая реальный баланс вложений.
-3. Оценивай эмоциональную цену (Emotional Cost): сколько искренней заботы вкладывает один, и сколько реальной отдачи дает второй.
-4. Опирайся строго на факты и точные дословные цитаты. Если реальных Red Flags нет, не высасывай их из пальца — массив detected_red_flags может быть пустым или содержать только реальные инциденты.
-
-Язык ответа:
-Пиши текстовые описания (atmosphere_verdict, analysis, ratio_description, pattern_name) на основном языке общения в чате (русский / украинский), сохраняя аутентичный контекст и терминологию, а ключи JSON оставляй строго на английском в соответствии со схемой.
-
-Верни строго валидный JSON-объект без каких-либо markdown-обёрток.
-
-JSON schema:
-{
-  "atmosphere_verdict": "string (краткий неромантизированный вердикт о реальном характере динамики)",
-  "per_user_metrics": {
-    "user_1": {
-      "name": "fwss",
-      "warmth_and_support": 70, // integer 0-100, искренняя забота и интерес к делам
-      "humor_and_banter": 85, // integer 0-100, открытый юмор и дружеский стеб
-      "toxicity_and_manipulation": 15, // integer 0-100, реальная пассивная агрессия, качели, обиды
-      "emotional_investment": 80 // integer 0-100, объем отданной энергии
-    },
-    "user_2": {
-      "name": "string (имя второго участника)",
-      "warmth_and_support": 30, // integer 0-100
-      "humor_and_banter": 60, // integer 0-100
-      "toxicity_and_manipulation": 25, // integer 0-100
-      "emotional_investment": 40 // integer 0-100
-    }
-  },
-  "reciprocity_balance": {
-    "ratio_description": "string (соотношение отдачи и потребления внимания)",
-    "primary_drain": "string (кто выступает донором внимания, а кто потребителем)"
-  },
-  "detected_red_flags": [
-    {
-      "pattern_name": "string (только реальные манипуляции: Наказание молчанием, Нарушение границ занятости, Газлайтинг)",
-      "quote": "string (дословная цитата из чата)",
-      "analysis": "string (почему это реальный деструктивный паттерн, а не дружеский прикол)"
-    }
-  ],
-  "boundary_health": "High" // Low | Medium | High
-}`
-
 export const GEMINI_MODELS = [
   {
     id: 'gemini-2.5-pro',
     name: 'Gemini 2.5 Pro',
     badge: 'Recommended',
-    description: 'Deep psychological audit & detailed behavioural quotes',
-  },
-  {
-    id: 'gemini-1.5-pro',
-    name: 'Gemini 1.5 Pro',
-    badge: 'Classic Pro',
-    description: 'Deep context reasoning and detailed long-form answers',
+    description: 'Deep psychological audit, precise coefficients & behavioural quotes',
   },
   {
     id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
     badge: 'Fast',
-    description: 'Quick behavioral scan with high throughput',
-  },
-  {
-    id: 'gemini-2.0-flash',
-    name: 'Gemini 2.0 Flash',
-    badge: 'Standard',
-    description: 'Reliable and responsive baseline analysis',
+    description: 'Rapid quantitative scan with high throughput',
   },
 ]
 
@@ -129,6 +67,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
   const [error, setError] = useState<string | null>(null)
   const [aiResult, setAiResult] = useState<AiAnalysisResult | null>(null)
   const [isCopied, setIsCopied] = useState<boolean>(false)
+  const [patternFilter, setPatternFilter] = useState<'all' | 'constructive' | 'warning' | 'destructive'>('all')
 
   // Load saved key & model from localStorage on mount
   useEffect(() => {
@@ -157,7 +96,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
 
   // Direct client-side call to Google Gemini API (bypasses Vercel 10s Serverless timeout)
   const callGeminiDirect = async (cleanLog: string, keyToUse: string): Promise<AiAnalysisResult> => {
-    const fallbackList = ['gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash']
+    const fallbackList = ['gemini-2.5-pro', 'gemini-2.5-flash']
     const modelsToTry = [selectedModel, ...fallbackList.filter((m) => m !== selectedModel)]
     let lastError: string | null = null
 
@@ -195,19 +134,14 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
       }
 
       const data = await response.json()
-      let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text
 
       if (!rawText) {
         lastError = `Model ${model} returned empty content.`
         continue
       }
 
-      rawText = rawText.trim()
-      if (rawText.startsWith('```json')) rawText = rawText.slice(7)
-      if (rawText.startsWith('```')) rawText = rawText.slice(3)
-      if (rawText.endsWith('```')) rawText = rawText.slice(0, -3)
-
-      return JSON.parse(rawText) as AiAnalysisResult
+      return parseAiAnalysisJson(rawText)
     }
 
     throw new Error(lastError || 'Failed to get a response from Gemini. Please check your API key.')
@@ -252,8 +186,6 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
     try {
       const { logText, exportedMessages } = prepareChatLogForAI(rawExportData)
 
-      setLoadingStep(`Performing calibrated behavioral audit on ${formatNumber(exportedMessages)} messages...`)
-
       let result: AiAnalysisResult
       const trimmedKey = apiKey.trim()
       const currentModelName = GEMINI_MODELS.find((m) => m.id === selectedModel)?.name || selectedModel
@@ -278,33 +210,51 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
 
   const handleCopyReport = () => {
     if (!aiResult) return
-    const u1 = aiResult.per_user_metrics.user_1
-    const u2 = aiResult.per_user_metrics.user_2
+    const u1 = aiResult.participants?.user_1 || aiResult.per_user_metrics?.user_1
+    const u2 = aiResult.participants?.user_2 || aiResult.per_user_metrics?.user_2
+    const coeffs = aiResult.communication_coefficients
 
-    const textToCopy = `📋 CALIBRATED COMMUNICATION & BEHAVIORAL AUDIT: "${rawExportData.name || 'Chat'}"
+    const textToCopy = `📊 COMPREHENSIVE COMMUNICATION AUDIT: "${rawExportData.name || 'Chat'}"
 --------------------------------------------------
-Verdict: ${aiResult.atmosphere_verdict}
+Atmosphere Verdict: ${aiResult.atmosphere_verdict}
+Relationship Vibe: ${aiResult.relationship_vibe || 'N/A'}
+Tandem Superpower: ${aiResult.tandem_superpower || 'N/A'}
 Boundary Health: ${aiResult.boundary_health}
 
-⚖️ RECIPROCITY BALANCE:
-Ratio: ${aiResult.reciprocity_balance.ratio_description}
-Dynamics: ${aiResult.reciprocity_balance.primary_drain}
+👤 ${u1.name} — Title: "${u1.badge?.title}"
+   • Role: ${u1.badge?.description}
+   • Attention ROI: ${u1.attention_roi_multiplier}x
+   • Topic Depth Retention: ${u1.topic_retention_replies} replies
+   • Topic Hijack Rate: ${u1.topic_hijack_per_10} / 10
+   • Validation Index: ${u1.validation_index_percent}%
+   • Answer Elaboration: ${u1.elaboration_words_per_answer} words/answer
+   • Initiation Share: ${u1.initiation_share_percent}%
 
-📊 COMPARATIVE METRICS (${u1.name} vs ${u2.name}):
-• Warmth & Support: ${u1.name} (${u1.warmth_and_support}%) vs ${u2.name} (${u2.warmth_and_support}%)
-• Humor & Banter: ${u1.name} (${u1.humor_and_banter}%) vs ${u2.name} (${u2.humor_and_banter}%)
-• Toxicity & Manipulation: ${u1.name} (${u1.toxicity_and_manipulation}%) vs ${u2.name} (${u2.toxicity_and_manipulation}%)
-• Emotional Investment: ${u1.name} (${u1.emotional_investment}%) vs ${u2.name} (${u2.emotional_investment}%)
+👤 ${u2.name} — Title: "${u2.badge?.title}"
+   • Role: ${u2.badge?.description}
+   • Attention ROI: ${u2.attention_roi_multiplier}x
+   • Topic Depth Retention: ${u2.topic_retention_replies} replies
+   • Topic Hijack Rate: ${u2.topic_hijack_per_10} / 10
+   • Validation Index: ${u2.validation_index_percent}%
+   • Answer Elaboration: ${u2.elaboration_words_per_answer} words/answer
+   • Initiation Share: ${u2.initiation_share_percent}%
 
-🚩 DETECTED RED FLAGS & FRICTION POINTS:
-${aiResult.detected_red_flags.length > 0
-  ? aiResult.detected_red_flags
-      .map(
-        (flag, idx) =>
-          `${idx + 1}. [${flag.pattern_name}]\n   Quote: «${flag.quote}»\n   Analysis: ${flag.analysis}`
-      )
-      .join('\n\n')
-  : 'None detected (Healthy boundaries & banter)'}
+⚖️ COMMUNICATION DYNAMICS:
+• Attention Balance: ${coeffs?.attention_balance_summary || ''}
+• Topic Reception: ${coeffs?.topic_reception_verdict || ''}
+• Dialogue Driver: ${coeffs?.dialogue_driver || ''}
+
+🔍 DETECTED PATTERNS:
+${
+  aiResult.detected_patterns?.length > 0
+    ? aiResult.detected_patterns
+        .map(
+          (p, i) =>
+            `${i + 1}. [${p.pattern_type.toUpperCase()}] ${p.pattern_name}\n   Quote: "${p.quote}"\n   Analysis: ${p.analysis}`
+        )
+        .join('\n\n')
+    : 'No significant anomalies detected.'
+}
 `
     navigator.clipboard.writeText(textToCopy)
     setIsCopied(true)
@@ -340,8 +290,20 @@ ${aiResult.detected_red_flags.length > 0
 
   const totalRawMessages = rawExportData.messages?.length || 0
 
-  const user1 = aiResult?.per_user_metrics?.user_1
-  const user2 = aiResult?.per_user_metrics?.user_2
+  const user1 = aiResult?.participants?.user_1 || aiResult?.per_user_metrics?.user_1
+  const user2 = aiResult?.participants?.user_2 || aiResult?.per_user_metrics?.user_2
+  const coeffs = aiResult?.communication_coefficients
+
+  const filteredPatterns = (aiResult?.detected_patterns || []).filter((p) => {
+    if (patternFilter === 'all') return true
+    return p.pattern_type === patternFilter
+  })
+
+  const getRoiDescription = (roi: number) => {
+    if (roi >= 1.2) return { text: 'Generous Contributor', color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' }
+    if (roi >= 0.9) return { text: 'Balanced Exchange', color: 'text-blue-500 bg-blue-500/10 border-blue-500/20' }
+    return { text: 'Energy Saver', color: 'text-amber-500 bg-amber-500/10 border-amber-500/20' }
+  }
 
   return (
     <div className="space-y-6 pb-12 animate-fade-in">
@@ -350,19 +312,19 @@ ${aiResult.detected_red_flags.length > 0
         <div className="rounded-3xl border border-border bg-card p-6 sm:p-10 shadow-xs relative overflow-hidden">
           <div className="max-w-2xl mx-auto text-center space-y-4">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold border border-primary/20">
-              <ShieldAlert className="w-3.5 h-3.5" />
-              <span>Calibrated Behavioral & Communication Audit</span>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Multi-Dimensional Communication & Behavioral Audit</span>
             </div>
 
             <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-foreground">
-              Objective audit distinguishing healthy banter from real manipulation
+              Deep behavioral audit with precise communicative coefficients & archetypes
             </h2>
 
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
               Audits all{' '}
               <strong className="text-foreground font-semibold">{formatNumber(totalRawMessages)} messages</strong> in{' '}
-              <strong className="text-foreground">«{rawExportData.name || 'Chat'}»</strong>. Distinguishes consensual
-              humor, swearing, and teasing from genuine red flags (stonewalling, emotional drain, broken boundaries).
+              <strong className="text-foreground">«{rawExportData.name || 'Chat'}»</strong>. Computes Attention ROI, topic
+              depth retention, initiation shares, participant titles, and healthy banter dynamics.
             </p>
 
             {/* Model Selection Dropdown */}
@@ -432,16 +394,7 @@ ${aiResult.detected_red_flags.length > 0
                     />
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    Get a free key at{' '}
-                    <a
-                      href="https://aistudio.google.com/app/apikey"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-primary underline hover:opacity-80"
-                    >
-                      Google AI Studio
-                    </a>
-                    . Queried directly from your browser with zero 10s server timeout limits.
+                    Direct Vertex AI Express Mode calls with zero 10s server timeout limits.
                   </p>
                 </div>
               )}
@@ -473,8 +426,8 @@ ${aiResult.detected_red_flags.length > 0
                   </>
                 ) : (
                   <>
-                    <ShieldAlert className="w-4 h-4" />
-                    <span>Run Calibrated Communication Audit</span>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Run Comprehensive Communication Audit</span>
                   </>
                 )}
               </button>
@@ -497,7 +450,7 @@ ${aiResult.detected_red_flags.length > 0
                   <span>Communication Audit: «{rawExportData.name || 'Chat'}»</span>
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Calibrated behavioral assessment based on {formatNumber(totalRawMessages)} messages
+                  Full data assessment based on {formatNumber(totalRawMessages)} messages
                 </p>
               </div>
             </div>
@@ -545,51 +498,144 @@ ${aiResult.detected_red_flags.length > 0
             </div>
           </div>
 
-          {/* Verdict and Boundary Health Banner */}
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-xs space-y-3">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
-                <ShieldAlert className="w-4 h-4" /> Dynamics & Atmosphere Verdict
-              </h4>
-              {getBoundaryHealthBadge(aiResult.boundary_health)}
+          {/* Verdict and Relationship Chemistry Banner */}
+          <div className="rounded-3xl border border-border bg-card p-6 sm:p-7 shadow-xs space-y-4 relative overflow-hidden">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold border border-primary/20 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Vibe: {aiResult.relationship_vibe}</span>
+                </span>
+                {getBoundaryHealthBadge(aiResult.boundary_health)}
+              </div>
             </div>
 
             <p className="text-sm sm:text-base text-foreground/95 leading-relaxed font-medium">
               {aiResult.atmosphere_verdict}
             </p>
+
+            {aiResult.tandem_superpower && (
+              <div className="p-4 rounded-2xl bg-secondary/40 border border-border/60 flex items-start gap-3">
+                <Zap className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <div className="space-y-0.5 text-xs">
+                  <span className="font-bold text-foreground">Tandem Superpower:</span>
+                  <p className="text-muted-foreground leading-relaxed">{aiResult.tandem_superpower}</p>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Reciprocity Balance */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-xs space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
-                <ArrowRightLeft className="w-4 h-4" /> Attention Ratio & Reciprocity
-              </h4>
-              <p className="text-sm text-foreground/90 leading-relaxed">
-                {aiResult.reciprocity_balance.ratio_description}
-              </p>
-            </div>
+          {/* Participant Titles & Archetype Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+            {[
+              { u: user1, color: 'border-blue-500/30', badgeBg: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
+              { u: user2, color: 'border-rose-500/30', badgeBg: 'bg-rose-500/10 text-rose-500 border-rose-500/20' },
+            ].map(({ u, color, badgeBg }, idx) => {
+              const roiBadge = getRoiDescription(u.attention_roi_multiplier)
+              return (
+                <div
+                  key={idx}
+                  className={`rounded-3xl border ${color} bg-card p-6 shadow-xs space-y-5 relative overflow-hidden`}
+                >
+                  {/* Participant Header */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Crown className="w-4 h-4 text-amber-500" />
+                        <h4 className="text-lg font-extrabold text-foreground">{u.name}</h4>
+                      </div>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${badgeBg}`}>
+                        <Award className="w-3.5 h-3.5" />
+                        <span>«{u.badge?.title}»</span>
+                      </span>
+                    </div>
 
-            <div className="rounded-2xl border border-border bg-card p-5 shadow-xs space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-rose-500 flex items-center gap-1.5">
-                <Zap className="w-4 h-4" /> Energy Drain & Donor Dynamics
-              </h4>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {aiResult.reciprocity_balance.primary_drain}
-              </p>
-            </div>
+                    <div className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border ${roiBadge.color}`}>
+                      ROI: {u.attention_roi_multiplier}x
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground leading-relaxed italic bg-secondary/30 p-3 rounded-xl border border-border/40">
+                    "{u.badge?.description}"
+                  </p>
+
+                  {/* Concrete Key Stats */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    <div className="p-3 rounded-2xl bg-secondary/40 border border-border/50 text-center">
+                      <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                        Topic Depth
+                      </div>
+                      <div className="text-base font-extrabold text-foreground mt-0.5">
+                        {u.topic_retention_replies} <span className="text-xs font-normal text-muted-foreground">replies</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">Avg Retention</div>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-secondary/40 border border-border/50 text-center">
+                      <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                        Validation
+                      </div>
+                      <div className="text-base font-extrabold text-emerald-500 mt-0.5">
+                        {u.validation_index_percent}%
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">Support Rate</div>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-secondary/40 border border-border/50 text-center col-span-2 sm:col-span-1">
+                      <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                        Answer Words
+                      </div>
+                      <div className="text-base font-extrabold text-foreground mt-0.5">
+                        {u.elaboration_words_per_answer} <span className="text-xs font-normal text-muted-foreground">w</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">Per Direct Question</div>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-secondary/40 border border-border/50 text-center">
+                      <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                        Initiation
+                      </div>
+                      <div className="text-base font-extrabold text-primary mt-0.5">
+                        {u.initiation_share_percent}%
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">Pause Starters</div>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-secondary/40 border border-border/50 text-center">
+                      <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                        Topic Hijack
+                      </div>
+                      <div className={`text-base font-extrabold mt-0.5 ${u.topic_hijack_per_10 > 2.5 ? 'text-amber-500' : 'text-foreground'}`}>
+                        {u.topic_hijack_per_10} <span className="text-xs font-normal text-muted-foreground">/ 10</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">Shift to Self</div>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-secondary/40 border border-border/50 text-center col-span-2 sm:col-span-1">
+                      <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                        Energy ROI
+                      </div>
+                      <div className="text-base font-extrabold text-foreground mt-0.5">
+                        {u.attention_roi_multiplier}x
+                      </div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">{roiBadge.text}</div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
 
-          {/* Side-by-Side Comparative Metrics */}
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-xs space-y-6">
+          {/* Side-by-Side Comparative Progress Bars */}
+          <div className="rounded-3xl border border-border bg-card p-6 sm:p-7 shadow-xs space-y-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-border/60 pb-3">
               <div>
                 <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                   <Scale className="w-5 h-5 text-primary" />
-                  <span>Side-by-Side Behavioral Metrics</span>
+                  <span>Head-to-Head Communicative Metric Comparison</span>
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Direct asymmetry comparison distinguishing friendly banter from real friction
+                  Direct asymmetry comparison across conversational depth, empathy and banter
                 </p>
               </div>
 
@@ -607,24 +653,25 @@ ${aiResult.detected_red_flags.length > 0
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* 1. Warmth & Support */}
-              <div className="space-y-3 p-4 rounded-xl bg-secondary/30 border border-border/40">
+              {/* 1. Attention ROI Multiplier */}
+              <div className="space-y-3 p-4 rounded-2xl bg-secondary/30 border border-border/40">
                 <div className="flex items-center justify-between text-xs font-semibold text-foreground">
                   <span className="flex items-center gap-1.5">
-                    <Heart className="w-4 h-4 text-emerald-500" /> Sincere Warmth & Support
+                    <ArrowRightLeft className="w-4 h-4 text-primary" /> Attention Return on Investment (ROI)
                   </span>
+                  <span className="text-[10px] text-muted-foreground font-normal">1.0x = Equal return</span>
                 </div>
 
                 <div className="space-y-2 text-xs">
                   <div>
                     <div className="flex justify-between text-[11px] mb-1">
                       <span className="font-semibold text-blue-500">{user1.name}</span>
-                      <span className="font-bold text-foreground">{user1.warmth_and_support}%</span>
+                      <span className="font-bold text-foreground">{user1.attention_roi_multiplier}x</span>
                     </div>
                     <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
                       <div
                         className="bg-blue-500 h-full rounded-full transition-all duration-700"
-                        style={{ width: `${user1.warmth_and_support}%` }}
+                        style={{ width: `${Math.min(100, user1.attention_roi_multiplier * 50)}%` }}
                       />
                     </div>
                   </div>
@@ -632,24 +679,101 @@ ${aiResult.detected_red_flags.length > 0
                   <div>
                     <div className="flex justify-between text-[11px] mb-1">
                       <span className="font-semibold text-rose-500">{user2.name}</span>
-                      <span className="font-bold text-foreground">{user2.warmth_and_support}%</span>
+                      <span className="font-bold text-foreground">{user2.attention_roi_multiplier}x</span>
                     </div>
                     <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
                       <div
                         className="bg-rose-500 h-full rounded-full transition-all duration-700"
-                        style={{ width: `${user2.warmth_and_support}%` }}
+                        style={{ width: `${Math.min(100, user2.attention_roi_multiplier * 50)}%` }}
                       />
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* 2. Humor & Banter */}
-              <div className="space-y-3 p-4 rounded-xl bg-secondary/30 border border-border/40">
+              {/* 2. Topic Retention Depth */}
+              <div className="space-y-3 p-4 rounded-2xl bg-secondary/30 border border-border/40">
                 <div className="flex items-center justify-between text-xs font-semibold text-foreground">
                   <span className="flex items-center gap-1.5">
-                    <Smile className="w-4 h-4 text-amber-500" /> Open Humor & Friendly Banter
+                    <Compass className="w-4 h-4 text-emerald-500" /> Topic Depth Retention
                   </span>
+                  <span className="text-[10px] text-muted-foreground font-normal">Average replies / topic</span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-semibold text-blue-500">{user1.name}</span>
+                      <span className="font-bold text-foreground">{user1.topic_retention_replies} replies</span>
+                    </div>
+                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-blue-500 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${Math.min(100, user1.topic_retention_replies * 18)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-semibold text-rose-500">{user2.name}</span>
+                      <span className="font-bold text-foreground">{user2.topic_retention_replies} replies</span>
+                    </div>
+                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-rose-500 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${Math.min(100, user2.topic_retention_replies * 18)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Validation & Support */}
+              <div className="space-y-3 p-4 rounded-2xl bg-secondary/30 border border-border/40">
+                <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Heart className="w-4 h-4 text-rose-500" /> Validation & Empathy Rate
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-normal">0-100%</span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-semibold text-blue-500">{user1.name}</span>
+                      <span className="font-bold text-foreground">{user1.validation_index_percent}%</span>
+                    </div>
+                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-blue-500 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${user1.validation_index_percent}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-[11px] mb-1">
+                      <span className="font-semibold text-rose-500">{user2.name}</span>
+                      <span className="font-bold text-foreground">{user2.validation_index_percent}%</span>
+                    </div>
+                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-rose-500 h-full rounded-full transition-all duration-700"
+                        style={{ width: `${user2.validation_index_percent}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Open Humor & Banter */}
+              <div className="space-y-3 p-4 rounded-2xl bg-secondary/30 border border-border/40">
+                <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Smile className="w-4 h-4 text-amber-500" /> Humor & Friendly Banter
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-normal">0-100%</span>
                 </div>
 
                 <div className="space-y-2 text-xs">
@@ -680,122 +804,115 @@ ${aiResult.detected_red_flags.length > 0
                   </div>
                 </div>
               </div>
-
-              {/* 3. Toxicity & Manipulation */}
-              <div className="space-y-3 p-4 rounded-xl bg-secondary/30 border border-border/40">
-                <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Flame className="w-4 h-4 text-rose-500" /> Real Toxicity & Manipulation (Not Banter)
-                  </span>
-                </div>
-
-                <div className="space-y-2 text-xs">
-                  <div>
-                    <div className="flex justify-between text-[11px] mb-1">
-                      <span className="font-semibold text-blue-500">{user1.name}</span>
-                      <span className="font-bold text-foreground">{user1.toxicity_and_manipulation}%</span>
-                    </div>
-                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-blue-500 h-full rounded-full transition-all duration-700"
-                        style={{ width: `${user1.toxicity_and_manipulation}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-[11px] mb-1">
-                      <span className="font-semibold text-rose-500">{user2.name}</span>
-                      <span className="font-bold text-foreground">{user2.toxicity_and_manipulation}%</span>
-                    </div>
-                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-rose-500 h-full rounded-full transition-all duration-700"
-                        style={{ width: `${user2.toxicity_and_manipulation}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* 4. Emotional Investment */}
-              <div className="space-y-3 p-4 rounded-xl bg-secondary/30 border border-border/40">
-                <div className="flex items-center justify-between text-xs font-semibold text-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Zap className="w-4 h-4 text-purple-500" /> Emotional Investment & Energy
-                  </span>
-                </div>
-
-                <div className="space-y-2 text-xs">
-                  <div>
-                    <div className="flex justify-between text-[11px] mb-1">
-                      <span className="font-semibold text-blue-500">{user1.name}</span>
-                      <span className="font-bold text-foreground">{user1.emotional_investment}%</span>
-                    </div>
-                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-blue-500 h-full rounded-full transition-all duration-700"
-                        style={{ width: `${user1.emotional_investment}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-[11px] mb-1">
-                      <span className="font-semibold text-rose-500">{user2.name}</span>
-                      <span className="font-bold text-foreground">{user2.emotional_investment}%</span>
-                    </div>
-                    <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-rose-500 h-full rounded-full transition-all duration-700"
-                        style={{ width: `${user2.emotional_investment}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
 
-          {/* Detected Red Flags & Friction Points */}
+          {/* Deep Communication Dynamics Synthesis */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="rounded-3xl border border-border bg-card p-5 sm:p-6 shadow-xs space-y-2.5">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+                <ArrowRightLeft className="w-4 h-4" /> Attention & Reciprocity
+              </h4>
+              <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed font-normal">
+                {coeffs?.attention_balance_summary}
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-border bg-card p-5 sm:p-6 shadow-xs space-y-2.5">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-500 flex items-center gap-1.5">
+                <Compass className="w-4 h-4" /> Topic Reception & Listening
+              </h4>
+              <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed font-normal">
+                {coeffs?.topic_reception_verdict}
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-border bg-card p-5 sm:p-6 shadow-xs space-y-2.5">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-purple-500 flex items-center gap-1.5">
+                <Repeat className="w-4 h-4" /> Dialogue Engine
+              </h4>
+              <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed font-normal">
+                {coeffs?.dialogue_driver}
+              </p>
+            </div>
+          </div>
+
+          {/* Communicative Patterns & Evidence */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-rose-500" />
-                <span>Detected Red Flags & Friction Points ({aiResult.detected_red_flags.length})</span>
-              </h3>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-primary" />
+                  <span>Key Communicative Patterns & Direct Quotes</span>
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Illustrative conversational evidence distinguishing constructive bonding from friction
+                </p>
+              </div>
+
+              {/* Filter Pills */}
+              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-secondary/50 border border-border text-xs">
+                {(['all', 'constructive', 'warning', 'destructive'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setPatternFilter(filter)}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-all capitalize cursor-pointer ${
+                      patternFilter === filter
+                        ? 'bg-primary text-primary-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="space-y-3">
-              {aiResult.detected_red_flags.map((flag, idx) => (
-                <div
-                  key={idx}
-                  className="rounded-2xl border border-rose-500/20 bg-card p-5 shadow-xs space-y-3 hover:border-rose-500/40 transition-colors"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="px-3 py-1 rounded-full bg-rose-500/10 text-rose-500 font-bold text-xs border border-rose-500/20">
-                      {flag.pattern_name}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground font-mono">Case #{idx + 1}</span>
-                  </div>
+              {filteredPatterns.map((pattern, idx) => {
+                const badgeStyle =
+                  pattern.pattern_type === 'constructive'
+                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                    : pattern.pattern_type === 'warning'
+                      ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                      : 'bg-rose-500/10 text-rose-500 border-rose-500/20'
 
-                  {flag.quote && (
-                    <div className="p-3 rounded-xl bg-secondary/50 border border-border/60 text-xs italic text-foreground flex items-start gap-2.5">
-                      <Quote className="w-4 h-4 text-rose-500 shrink-0 opacity-70 mt-0.5" />
-                      <span className="font-medium">«{flag.quote.replace(/^«|»$/g, '')}»</span>
+                return (
+                  <div
+                    key={idx}
+                    className="rounded-3xl border border-border bg-card p-5 sm:p-6 shadow-xs space-y-3 hover:border-primary/40 transition-colors"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold border uppercase tracking-wider ${badgeStyle}`}>
+                          {pattern.pattern_type}
+                        </span>
+                        <span className="font-bold text-foreground text-sm">
+                          {pattern.pattern_name}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-muted-foreground font-mono">Evidence #{idx + 1}</span>
                     </div>
-                  )}
 
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    <strong className="text-foreground">Analysis:</strong> {flag.analysis}
-                  </p>
-                </div>
-              ))}
+                    {pattern.quote && (
+                      <div className="p-3.5 rounded-2xl bg-secondary/50 border border-border/60 text-xs italic text-foreground flex items-start gap-2.5">
+                        <Quote className="w-4 h-4 text-primary shrink-0 opacity-70 mt-0.5" />
+                        <span className="font-medium">«{pattern.quote.replace(/^«|»$/g, '')}»</span>
+                      </div>
+                    )}
 
-              {aiResult.detected_red_flags.length === 0 && (
-                <div className="p-6 text-center text-xs text-muted-foreground rounded-2xl border border-border bg-card flex flex-col items-center gap-2">
+                    <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                      <strong className="text-foreground">Analysis:</strong> {pattern.analysis}
+                    </p>
+                  </div>
+                )
+              })}
+
+              {filteredPatterns.length === 0 && (
+                <div className="p-6 text-center text-xs text-muted-foreground rounded-3xl border border-border bg-card flex flex-col items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                  <span>No manipulative red flags detected. Conversation dynamics remain within consensual friendly banter and mutual trust.</span>
+                  <span>No instances found matching the current filter.</span>
                 </div>
               )}
             </div>
