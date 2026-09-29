@@ -6,6 +6,7 @@ interface RequestBody {
   chatName?: string
   chatLog: string
   apiKey?: string
+  model?: string
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -108,7 +109,9 @@ JSON schema:
   "boundary_health": "High" // Low | Medium | High
 }`
 
-    const modelsToTry = ['gemini-2.5-pro', 'gemini-2.5-flash']
+    const preferredModel = body.model || 'gemini-2.5-pro'
+    const fallbackList = ['gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash']
+    const modelsToTry = [preferredModel, ...fallbackList.filter((m) => m !== preferredModel)]
     let lastError: string | null = null
 
     for (const model of modelsToTry) {

@@ -16,11 +16,21 @@ import {
   ArrowRightLeft,
   Activity,
   CheckCircle2,
+  Sparkles,
 } from 'lucide-react'
 import type { TelegramExport } from '@/types/telegram'
 import type { AiAnalysisResult, BoundaryHealth } from '@/types/ai'
 import { prepareChatLogForAI } from '@/lib/prepareChatLog'
 import { formatNumber } from '@/lib/utils'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface AiAnalysisTabProps {
   rawExportData: TelegramExport
@@ -83,8 +93,36 @@ JSON schema:
   "boundary_health": "High" // Low | Medium | High
 }`
 
+export const GEMINI_MODELS = [
+  {
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 2.5 Pro',
+    badge: 'Recommended',
+    description: 'Deep psychological audit & detailed behavioural quotes',
+  },
+  {
+    id: 'gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro',
+    badge: 'Classic Pro',
+    description: 'Deep context reasoning and detailed long-form answers',
+  },
+  {
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    badge: 'Fast',
+    description: 'Quick behavioral scan with high throughput',
+  },
+  {
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
+    badge: 'Standard',
+    description: 'Reliable and responsive baseline analysis',
+  },
+]
+
 export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) => {
   const [apiKey, setApiKey] = useState<string>('')
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-pro')
   const [showKeyInput, setShowKeyInput] = useState<boolean>(false)
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [loadingStep, setLoadingStep] = useState<string>('')
@@ -92,13 +130,18 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
   const [aiResult, setAiResult] = useState<AiAnalysisResult | null>(null)
   const [isCopied, setIsCopied] = useState<boolean>(false)
 
-  // Load saved key from localStorage on mount
+  // Load saved key & model from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('tg_gemini_api_key')
     if (saved) {
       setApiKey(saved)
     } else {
       setShowKeyInput(true)
+    }
+
+    const savedModel = localStorage.getItem('tg_gemini_model')
+    if (savedModel && GEMINI_MODELS.some((m) => m.id === savedModel)) {
+      setSelectedModel(savedModel)
     }
   }, [])
 
@@ -107,9 +150,15 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
     localStorage.setItem('tg_gemini_api_key', key)
   }
 
+  const handleModelChange = (modelId: string) => {
+    setSelectedModel(modelId)
+    localStorage.setItem('tg_gemini_model', modelId)
+  }
+
   // Direct client-side call to Google Gemini API (bypasses Vercel 10s Serverless timeout)
   const callGeminiDirect = async (cleanLog: string, keyToUse: string): Promise<AiAnalysisResult> => {
-    const modelsToTry = ['gemini-2.5-pro', 'gemini-2.5-flash']
+    const fallbackList = ['gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash']
+    const modelsToTry = [selectedModel, ...fallbackList.filter((m) => m !== selectedModel)]
     let lastError: string | null = null
 
     for (const model of modelsToTry) {
@@ -176,6 +225,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
         chatName: rawExportData.name || 'Telegram Chat',
         chatLog: cleanLog,
         apiKey: apiKey.trim() || undefined,
+        model: selectedModel,
       }),
     })
 
@@ -206,11 +256,13 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
 
       let result: AiAnalysisResult
       const trimmedKey = apiKey.trim()
+      const currentModelName = GEMINI_MODELS.find((m) => m.id === selectedModel)?.name || selectedModel
+
       if (trimmedKey) {
-        setLoadingStep(`Gemini 2.5 Pro auditing ${formatNumber(exportedMessages)} messages directly...`)
+        setLoadingStep(`${currentModelName} auditing ${formatNumber(exportedMessages)} messages directly...`)
         result = await callGeminiDirect(logText, trimmedKey)
       } else {
-        setLoadingStep('Calling backend analyzer...')
+        setLoadingStep(`Auditing with ${currentModelName} via backend...`)
         result = await callServerless(logText)
       }
 
@@ -313,6 +365,43 @@ ${aiResult.detected_red_flags.length > 0
               humor, swearing, and teasing from genuine red flags (stonewalling, emotional drain, broken boundaries).
             </p>
 
+            {/* Model Selection Dropdown */}
+            <div className="max-w-md mx-auto text-left pt-2 pb-1 space-y-1.5">
+              <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  Gemini Model:
+                </span>
+                <span className="text-[11px] font-normal text-muted-foreground">Vertex AI Express Mode</span>
+              </label>
+
+              <Select value={selectedModel} onValueChange={(val) => handleModelChange(val as string)}>
+                <SelectTrigger className="w-full h-11 bg-background/80 border-border/80 hover:border-primary/40 focus:ring-primary/20 transition-all rounded-2xl px-3.5">
+                  <SelectValue placeholder="Choose a model" />
+                </SelectTrigger>
+                <SelectContent className="w-[calc(100vw-3rem)] max-w-md">
+                  <SelectGroup>
+                    <SelectLabel>Select Audit Model</SelectLabel>
+                    {GEMINI_MODELS.map((m) => (
+                      <SelectItem key={m.id} value={m.id} className="py-2.5">
+                        <div className="flex flex-col gap-0.5 text-left">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-foreground">{m.name}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium border border-primary/20">
+                              {m.badge}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-muted-foreground font-normal">
+                            {m.description}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Custom API Key input toggle */}
             <div className="pt-2 pb-2">
               <button
@@ -413,7 +502,28 @@ ${aiResult.detected_red_flags.length > 0
               </div>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <div className="w-full sm:w-44">
+                <Select value={selectedModel} onValueChange={(val) => handleModelChange(val as string)}>
+                  <SelectTrigger className="h-8.5 text-xs bg-secondary/80 text-secondary-foreground rounded-xl border-border px-3 font-medium">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="min-w-[13rem]">
+                    <SelectGroup>
+                      <SelectLabel>Switch Model</SelectLabel>
+                      {GEMINI_MODELS.map((m) => (
+                        <SelectItem key={m.id} value={m.id} className="text-xs py-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold">{m.name}</span>
+                            <span className="text-[10px] text-muted-foreground">({m.badge})</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <button
                 type="button"
                 onClick={handleCopyReport}
@@ -427,7 +537,7 @@ ${aiResult.detected_red_flags.length > 0
                 type="button"
                 onClick={runAnalysis}
                 disabled={isLoading}
-                className="px-3.5 py-1.5 rounded-xl border border-border bg-secondary text-secondary-foreground text-xs font-semibold hover:bg-secondary/80 transition-colors inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="flex-1 sm:flex-initial px-3.5 py-1.5 rounded-xl border border-border bg-secondary text-secondary-foreground text-xs font-semibold hover:bg-secondary/80 transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                 <span>Re-Audit</span>
