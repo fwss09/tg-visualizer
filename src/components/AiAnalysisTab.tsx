@@ -22,6 +22,10 @@ import {
   MessageSquare,
   Repeat,
   Compass,
+  Target,
+  Lightbulb,
+  CheckCircle,
+  AlertCircle,
 } from 'lucide-react'
 import type { TelegramExport } from '@/types/telegram'
 import type { AiAnalysisResult, BoundaryHealth, ParticipantMetrics } from '@/types/ai'
@@ -243,6 +247,23 @@ Boundary Health: ${aiResult.boundary_health}
 • Attention Balance: ${coeffs?.attention_balance_summary || ''}
 • Topic Reception: ${coeffs?.topic_reception_verdict || ''}
 • Dialogue Driver: ${coeffs?.dialogue_driver || ''}
+${
+  aiResult.recommendations
+    ? `
+💡 ACTIONABLE RECOMMENDATIONS:
+👤 ${u1.name} Focus: "${aiResult.recommendations.participant_1.focus}"
+   • Recommended:
+     ${aiResult.recommendations.participant_1.dos.map((d) => `+ ${d}`).join('\n     ')}
+   • Avoid / Risk zones:
+     ${aiResult.recommendations.participant_1.donts.map((d) => `- ${d}`).join('\n     ')}
+
+👤 ${u2.name} Focus: "${aiResult.recommendations.participant_2.focus}"
+   • Recommended:
+     ${aiResult.recommendations.participant_2.dos.map((d) => `+ ${d}`).join('\n     ')}
+   • Avoid / Risk zones:
+     ${aiResult.recommendations.participant_2.donts.map((d) => `- ${d}`).join('\n     ')}`
+    : ''
+}
 
 🔍 DETECTED PATTERNS:
 ${
@@ -836,6 +857,99 @@ ${
               </p>
             </div>
           </div>
+
+          {/* Actionable Recommendations for Dialogue Balancing */}
+          {aiResult.recommendations && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Lightbulb className="w-5 h-5 text-amber-500" />
+                  <span>Dialogue Balancing Recommendations</span>
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Symmetric, constructive growth points tailored to the communicative balance of each participant
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                {[
+                  { name: user1.name, rec: aiResult.recommendations.participant_1, userColor: 'border-blue-500/30', headerColor: 'text-blue-500' },
+                  { name: user2.name, rec: aiResult.recommendations.participant_2, userColor: 'border-rose-500/30', headerColor: 'text-rose-500' },
+                ].map(({ name, rec, userColor, headerColor }, idx) => (
+                  <div
+                    key={idx}
+                    className={`rounded-3xl border ${userColor} bg-card p-6 shadow-xs flex flex-col justify-between space-y-5`}
+                  >
+                    <div className="space-y-4">
+                      {/* Participant Header */}
+                      <div className="flex items-center justify-between border-b border-border/50 pb-3">
+                        <span className={`text-base font-extrabold flex items-center gap-2 ${headerColor}`}>
+                          <Crown className="w-4 h-4 text-amber-500" />
+                          <span>{name}</span>
+                        </span>
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                          Participant #{idx + 1}
+                        </span>
+                      </div>
+
+                      {/* Focus Statement */}
+                      <div className="p-3.5 rounded-2xl bg-secondary/50 border border-border/60 space-y-1">
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-primary">
+                          <Target className="w-3.5 h-3.5" />
+                          <span>Core Growth Focus</span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-foreground/95 font-medium leading-relaxed">
+                          {rec.focus}
+                        </p>
+                      </div>
+
+                      {/* Recommended (Dos) */}
+                      {rec.dos && rec.dos.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-500">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            <span>Recommended Actions</span>
+                          </div>
+                          <ul className="space-y-1.5">
+                            {rec.dos.map((item, dIdx) => (
+                              <li
+                                key={dIdx}
+                                className="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 text-xs sm:text-sm text-foreground/90 leading-relaxed"
+                              >
+                                <span className="text-emerald-500 font-bold shrink-0 mt-0.5">•</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Risk Zones (Donts) */}
+                      {rec.donts && rec.donts.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-500">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span>Friction Patterns to Avoid</span>
+                          </div>
+                          <ul className="space-y-1.5">
+                            {rec.donts.map((item, dIdx) => (
+                              <li
+                                key={dIdx}
+                                className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/15 text-xs sm:text-sm text-muted-foreground leading-relaxed"
+                              >
+                                <span className="text-amber-500 font-bold shrink-0 mt-0.5">•</span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Communicative Patterns & Evidence */}
           <div className="space-y-4">

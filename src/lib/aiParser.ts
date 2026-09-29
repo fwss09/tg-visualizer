@@ -4,6 +4,8 @@ import type {
   ParticipantBadge,
   DetectedPattern,
   BoundaryHealth,
+  ParticipantRecommendation,
+  Recommendations,
 } from '@/types/ai'
 
 function sanitizeNumber(val: any, fallback = 0, isFloat = false): number {
@@ -179,5 +181,52 @@ export function parseAiAnalysisJson(rawJsonText: string): AiAnalysisResult {
     detected_patterns,
     detected_red_flags: detected_patterns,
     boundary_health,
+    recommendations: extractRecommendations(parsed, user1.name, user2.name),
+  }
+}
+
+function normalizeRecommendationItem(raw: any): ParticipantRecommendation {
+  const focus = typeof raw?.focus === 'string' ? raw.focus : 'Поддержание сбалансированного и открытого диалога.'
+  const dos = Array.isArray(raw?.dos)
+    ? raw.dos.filter((d: any) => typeof d === 'string' && d.trim().length > 0)
+    : []
+  const donts = Array.isArray(raw?.donts)
+    ? raw.donts.filter((d: any) => typeof d === 'string' && d.trim().length > 0)
+    : []
+  return { focus, dos, donts }
+}
+
+function extractRecommendations(parsed: any, user1Name: string, user2Name: string): Recommendations | undefined {
+  const rawRecs = parsed?.recommendations
+  if (!rawRecs || typeof rawRecs !== 'object') return undefined
+
+  let rec1: any = null
+  let rec2: any = null
+
+  if (Array.isArray(rawRecs)) {
+    rec1 = rawRecs[0]
+    rec2 = rawRecs[1]
+  } else if (rawRecs.participant_1 || rawRecs.participant_2) {
+    rec1 = rawRecs.participant_1
+    rec2 = rawRecs.participant_2
+  } else if (rawRecs.user_1 || rawRecs.user_2) {
+    rec1 = rawRecs.user_1
+    rec2 = rawRecs.user_2
+  } else if (rawRecs[user1Name] || rawRecs[user2Name]) {
+    rec1 = rawRecs[user1Name]
+    rec2 = rawRecs[user2Name]
+  } else {
+    const vals = Object.values(rawRecs)
+    if (vals.length >= 2) {
+      rec1 = vals[0]
+      rec2 = vals[1]
+    }
+  }
+
+  if (!rec1 && !rec2) return undefined
+
+  return {
+    participant_1: normalizeRecommendationItem(rec1),
+    participant_2: normalizeRecommendationItem(rec2),
   }
 }

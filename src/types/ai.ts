@@ -35,6 +35,17 @@ export interface DetectedPattern {
 
 export type BoundaryHealth = 'Low' | 'Medium' | 'High'
 
+export interface ParticipantRecommendation {
+  focus: string
+  dos: string[]
+  donts: string[]
+}
+
+export interface Recommendations {
+  participant_1: ParticipantRecommendation
+  participant_2: ParticipantRecommendation
+}
+
 export interface AiAnalysisResult {
   atmosphere_verdict: string
   relationship_vibe: string
@@ -46,6 +57,7 @@ export interface AiAnalysisResult {
   communication_coefficients: CommunicationCoefficients
   detected_patterns: DetectedPattern[]
   boundary_health: BoundaryHealth
+  recommendations?: Recommendations
   // Backward compatibility aliases if needed
   per_user_metrics?: {
     user_1: ParticipantMetrics
