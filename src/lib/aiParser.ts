@@ -18,31 +18,71 @@ function sanitizeNumber(val: any, fallback = 0, isFloat = false): number {
   return fallback
 }
 
-function normalizeBadge(raw: any, defaultTitle = 'Собеседник'): ParticipantBadge {
+function normalizeBadge(raw: any, parent: any, defaultTitle = 'Участник диалога'): ParticipantBadge {
   if (typeof raw === 'string') {
-    return { title: raw, description: '' }
+    return { title: raw, description: parent?.badge_description || '' }
   }
-  return {
-    title: raw?.title || defaultTitle,
-    description: raw?.description || '',
-  }
+  const title = raw?.title || raw?.name || parent?.title || parent?.archetype || defaultTitle
+  const description = raw?.description || raw?.reason || parent?.badge_description || ''
+  return { title, description }
 }
 
 function normalizeParticipant(raw: any, defaultName: string): ParticipantMetrics {
   return {
     name: raw?.name || defaultName,
-    badge: normalizeBadge(raw?.badge, 'Участник диалога'),
-    attention_roi_multiplier: sanitizeNumber(raw?.attention_roi_multiplier, 1.0, true),
-    topic_retention_replies: sanitizeNumber(raw?.topic_retention_replies, 2.5, true),
-    topic_hijack_per_10: sanitizeNumber(raw?.topic_hijack_per_10, 1.0, true),
-    validation_index_percent: sanitizeNumber(raw?.validation_index_percent, 50),
-    elaboration_words_per_answer: sanitizeNumber(raw?.elaboration_words_per_answer, 15.0, true),
-    initiation_share_percent: sanitizeNumber(raw?.initiation_share_percent, 50),
+    badge: normalizeBadge(raw?.badge, raw, 'Участник диалога'),
+    attention_roi_multiplier: sanitizeNumber(raw?.attention_roi_multiplier ?? raw?.roi ?? raw?.attention_roi, 1.0, true),
+    topic_retention_replies: sanitizeNumber(raw?.topic_retention_replies ?? raw?.topic_retention, 2.5, true),
+    topic_hijack_per_10: sanitizeNumber(raw?.topic_hijack_per_10 ?? raw?.topic_hijack, 1.0, true),
+    validation_index_percent: sanitizeNumber(raw?.validation_index_percent ?? raw?.validation_score ?? raw?.validation_index, 50),
+    elaboration_words_per_answer: sanitizeNumber(raw?.elaboration_words_per_answer ?? raw?.elaboration_words ?? raw?.avg_words_per_answer, 15.0, true),
+    initiation_share_percent: sanitizeNumber(raw?.initiation_share_percent ?? raw?.initiation_share, 50),
     warmth_and_support: sanitizeNumber(raw?.warmth_and_support, 60),
     humor_and_banter: sanitizeNumber(raw?.humor_and_banter, 50),
     toxicity_and_manipulation: sanitizeNumber(raw?.toxicity_and_manipulation, 10),
     emotional_investment: sanitizeNumber(raw?.emotional_investment, 50),
   }
+}
+
+function extractUsers(parsed: any): [any, any] {
+  if (!parsed || typeof parsed !== 'object') return [{}, {}]
+
+  // 1. If participants is an array
+  if (Array.isArray(parsed.participants) && parsed.participants.length > 0) {
+    return [parsed.participants[0], parsed.participants[1] || {}]
+  }
+
+  // 2. If users is an array
+  if (Array.isArray(parsed.users) && parsed.users.length > 0) {
+    return [parsed.users[0], parsed.users[1] || {}]
+  }
+
+  // 3. If participants has user_1 / user_2
+  if (parsed.participants && typeof parsed.participants === 'object') {
+    if (parsed.participants.user_1 || parsed.participants.user_2) {
+      return [parsed.participants.user_1 || {}, parsed.participants.user_2 || {}]
+    }
+    const vals = Object.values(parsed.participants)
+    if (vals.length >= 2) return [vals[0], vals[1]]
+    if (vals.length === 1) return [vals[0], {}]
+  }
+
+  // 4. If per_user_metrics has user_1 / user_2 or object keys
+  if (parsed.per_user_metrics && typeof parsed.per_user_metrics === 'object') {
+    if (parsed.per_user_metrics.user_1 || parsed.per_user_metrics.user_2) {
+      return [parsed.per_user_metrics.user_1 || {}, parsed.per_user_metrics.user_2 || {}]
+    }
+    const vals = Object.values(parsed.per_user_metrics)
+    if (vals.length >= 2) return [vals[0], vals[1]]
+    if (vals.length === 1) return [vals[0], {}]
+  }
+
+  // 5. If user_1 / user_2 at root
+  if (parsed.user_1 || parsed.user_2) {
+    return [parsed.user_1 || {}, parsed.user_2 || {}]
+  }
+
+  return [{}, {}]
 }
 
 export function parseAiAnalysisJson(rawJsonText: string): AiAnalysisResult {
@@ -67,8 +107,7 @@ export function parseAiAnalysisJson(rawJsonText: string): AiAnalysisResult {
     }
   }
 
-  const rawUser1 = parsed?.participants?.user_1 || parsed?.per_user_metrics?.user_1 || {}
-  const rawUser2 = parsed?.participants?.user_2 || parsed?.per_user_metrics?.user_2 || {}
+  const [rawUser1, rawUser2] = extractUsers(parsed)
 
   const user1 = normalizeParticipant(rawUser1, 'fwss')
   const user2 = normalizeParticipant(rawUser2, 'Собеседник')
