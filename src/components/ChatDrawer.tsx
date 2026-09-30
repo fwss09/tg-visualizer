@@ -98,7 +98,8 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({ rawExportData, aiAuditRe
     localStorage.setItem('tg_gemini_api_key', key)
   }
 
-  const handleModelChange = (modelId: string) => {
+  const handleModelChange = (modelId: string | null) => {
+    if (!modelId) return
     setSelectedModel(modelId)
     localStorage.setItem('tg_chat_model', modelId)
   }
@@ -380,7 +381,7 @@ ${cleanLog}
           </div>
 
           <div className="w-48">
-            <Select value={selectedModel} onValueChange={handleModelChange}>
+            <Select value={selectedModel} onValueChange={(val) => handleModelChange(val as string)}>
               <SelectTrigger className="h-7 text-[11px] bg-background border-border/80 rounded-lg px-2">
                 <SelectValue />
               </SelectTrigger>
