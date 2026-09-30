@@ -56,7 +56,7 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     const preferredModel = body.model || 'gemini-2.5-pro'
-    const fallbackList = ['gemini-2.5-pro', 'gemini-2.5-flash']
+    const fallbackList = ['gemini-3.8-flash', 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-1.5-pro']
     const modelsToTry = [preferredModel, ...fallbackList.filter((m) => m !== preferredModel)]
     let lastError: string | null = null
 
@@ -77,7 +77,7 @@ export default async function handler(req: Request): Promise<Response> {
           generationConfig: {
             responseMimeType: 'application/json',
             temperature: 0.7,
-            maxOutputTokens: 32768,
+            maxOutputTokens: model.includes('1.5') ? 8192 : 32768,
           },
         }),
       })

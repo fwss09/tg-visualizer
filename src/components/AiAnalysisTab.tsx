@@ -49,6 +49,12 @@ interface AiAnalysisTabProps {
 
 export const GEMINI_MODELS = [
   {
+    id: 'gemini-3.8-flash',
+    name: 'Gemini 3.8 Flash',
+    badge: 'Express',
+    description: 'Next-gen high-throughput analytical model via Vertex AI Express',
+  },
+  {
     id: 'gemini-2.5-pro',
     name: 'Gemini 2.5 Pro',
     badge: 'Recommended',
@@ -59,6 +65,12 @@ export const GEMINI_MODELS = [
     name: 'Gemini 2.5 Flash',
     badge: 'Fast',
     description: 'Rapid quantitative scan with high throughput',
+  },
+  {
+    id: 'gemini-1.5-pro',
+    name: 'Gemini 1.5 Pro',
+    badge: 'Legacy',
+    description: 'Classic analytical model (max 8k output tokens)',
   },
 ]
 
@@ -100,7 +112,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
 
   // Direct client-side call to Google Gemini API (bypasses Vercel 10s Serverless timeout)
   const callGeminiDirect = async (cleanLog: string, keyToUse: string): Promise<AiAnalysisResult> => {
-    const fallbackList = ['gemini-2.5-pro', 'gemini-2.5-flash']
+    const fallbackList = ['gemini-3.8-flash', 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-1.5-pro']
     const modelsToTry = [selectedModel, ...fallbackList.filter((m) => m !== selectedModel)]
     let lastError: string | null = null
 
@@ -121,7 +133,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
           generationConfig: {
             responseMimeType: 'application/json',
             temperature: 0.7,
-            maxOutputTokens: 32768,
+            maxOutputTokens: model.includes('1.5') ? 8192 : 32768,
           },
         }),
       })
