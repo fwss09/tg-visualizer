@@ -230,6 +230,57 @@ export function repairTruncatedJson(rawStr: string): string {
   return str
 }
 
+function escapeUnescapedInnerQuotes(content: string): string {
+  let result = ''
+  for (let i = 0; i < content.length; i++) {
+    const ch = content[i]
+    if (ch === '"') {
+      let backslashCount = 0
+      let j = i - 1
+      while (j >= 0 && content[j] === '\\') {
+        backslashCount++
+        j--
+      }
+      // If even number of backslashes (0, 2, 4...), the quote is NOT escaped
+      if (backslashCount % 2 === 0) {
+        result += '\\"'
+      } else {
+        result += '"'
+      }
+    } else {
+      result += ch
+    }
+  }
+  return result
+}
+
+export function fixUnescapedQuotesInLines(json: string): string {
+  const lines = json.split('\n')
+  const repairedLines = lines.map((line) => {
+    // 1. Property with string value:
+    // e.g.   "quote": "text with "quotes" inside",
+    const kvMatch = line.match(/^(\s*"[a-zA-Z0-9_]+"\s*:\s*")(.*)("[\s,]*)$/)
+    if (kvMatch) {
+      const [, prefix, content, suffix] = kvMatch
+      return `${prefix}${escapeUnescapedInnerQuotes(content)}${suffix}`
+    }
+
+    // 2. Array item string:
+    // e.g.   "Не использовать "ты-сообщения"",
+    const arrMatch = line.match(/^(\s*")(.*)("[\s,]*)$/)
+    if (arrMatch) {
+      const [, prefix, content, suffix] = arrMatch
+      if (!content.includes('":')) {
+        return `${prefix}${escapeUnescapedInnerQuotes(content)}${suffix}`
+      }
+    }
+
+    return line
+  })
+
+  return repairedLines.join('\n')
+}
+
 export function parseAiAnalysisJson(rawJsonText: string): AiAnalysisResult {
   if (!rawJsonText || typeof rawJsonText !== 'string' || !rawJsonText.trim()) {
     throw new Error('AI response was empty.')
@@ -238,20 +289,35 @@ export function parseAiAnalysisJson(rawJsonText: string): AiAnalysisResult {
   let cleaned = extractJsonString(rawJsonText)
   let parsed: any
 
+  // 1. Try direct parsing
   try {
     parsed = JSON.parse(cleaned)
   } catch (err: any) {
+    // 2. Try repairing unescaped quotes inside strings
     try {
-      const repaired = repairTruncatedJson(cleaned)
-      parsed = JSON.parse(repaired)
+      const fixedQuotes = fixUnescapedQuotesInLines(cleaned)
+      parsed = JSON.parse(fixedQuotes)
     } catch {
+      // 3. Try repairing truncated/incomplete JSON
       try {
-        const fixed = cleaned
-          .replace(/,\s*([\]}])/g, '$1')
-          .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
-        parsed = JSON.parse(fixed)
+        const repaired = repairTruncatedJson(cleaned)
+        parsed = JSON.parse(repaired)
       } catch {
-        throw new Error(`Failed to parse AI response as JSON: ${err?.message || 'Syntax error'}`)
+        // 4. Try fixing quotes AND repairing truncation
+        try {
+          const fixedAndRepaired = repairTruncatedJson(fixUnescapedQuotesInLines(cleaned))
+          parsed = JSON.parse(fixedAndRepaired)
+        } catch {
+          // 5. Relaxed cleanup fallback
+          try {
+            const fixed = cleaned
+              .replace(/,\s*([\]}])/g, '$1')
+              .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
+            parsed = JSON.parse(fixed)
+          } catch {
+            throw new Error(`Failed to parse AI response as JSON: ${err?.message || 'Syntax error'}`)
+          }
+        }
       }
     }
   }
