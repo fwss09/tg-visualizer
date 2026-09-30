@@ -121,7 +121,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
           generationConfig: {
             responseMimeType: 'application/json',
             temperature: 0.7,
-            maxOutputTokens: 8192,
+            maxOutputTokens: 32768,
           },
         }),
       })
@@ -138,7 +138,10 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
       }
 
       const data = await response.json()
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text
+      const parts = data?.candidates?.[0]?.content?.parts
+      const nonThought = Array.isArray(parts) ? parts.filter((p: any) => !p.thought && typeof p.text === 'string') : []
+      const partsToUse = nonThought.length > 0 ? nonThought : (Array.isArray(parts) ? parts : [])
+      const rawText = partsToUse.map((p: any) => p.text || '').join('')
 
       if (!rawText) {
         lastError = `Model ${model} returned empty content.`

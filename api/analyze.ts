@@ -77,7 +77,7 @@ export default async function handler(req: Request): Promise<Response> {
           generationConfig: {
             responseMimeType: 'application/json',
             temperature: 0.7,
-            maxOutputTokens: 8192,
+            maxOutputTokens: 32768,
           },
         }),
       })
@@ -95,7 +95,10 @@ export default async function handler(req: Request): Promise<Response> {
       }
 
       const data = await response.json()
-      const rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text
+      const parts = data?.candidates?.[0]?.content?.parts
+      const nonThought = Array.isArray(parts) ? parts.filter((p: any) => !p.thought && typeof p.text === 'string') : []
+      const partsToUse = nonThought.length > 0 ? nonThought : (Array.isArray(parts) ? parts : [])
+      const rawContent = partsToUse.map((p: any) => p.text || '').join('')
 
       if (!rawContent) {
         lastError = `Model ${model} returned empty content.`

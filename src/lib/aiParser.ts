@@ -87,25 +87,172 @@ function extractUsers(parsed: any): [any, any] {
   return [{}, {}]
 }
 
-export function parseAiAnalysisJson(rawJsonText: string): AiAnalysisResult {
-  let cleaned = rawJsonText.trim()
-  if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7)
-  if (cleaned.startsWith('```')) cleaned = cleaned.slice(3)
-  if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3)
-  cleaned = cleaned.trim()
+export function extractJsonString(raw: string): string {
+  let str = (raw || '').trim()
 
+  // Match ```json ... ``` or ``` ... ``` (even if closing ``` was truncated at the end)
+  const fenceMatch = str.match(/```(?:json)?\s*([\s\S]*?)(?:```|$)/i)
+  if (fenceMatch && fenceMatch[1]) {
+    str = fenceMatch[1].trim()
+  }
+
+  // Find start of JSON ({ or [)
+  const firstBrace = str.indexOf('{')
+  const firstBracket = str.indexOf('[')
+  let startIndex = -1
+  if (firstBrace !== -1 && firstBracket !== -1) {
+    startIndex = Math.min(firstBrace, firstBracket)
+  } else if (firstBrace !== -1) {
+    startIndex = firstBrace
+  } else if (firstBracket !== -1) {
+    startIndex = firstBracket
+  }
+
+  if (startIndex !== -1) {
+    str = str.slice(startIndex).trim()
+  }
+
+  return str
+}
+
+export function repairTruncatedJson(rawStr: string): string {
+  let str = extractJsonString(rawStr)
+  if (!str) return '{}'
+
+  // Try direct parse first
+  try {
+    JSON.parse(str)
+    return str
+  } catch {
+    // Continue with repair
+  }
+
+  // Try standard trailing comma and unquoted key fix
+  try {
+    const quickFix = str
+      .replace(/,\s*([\]}])/g, '$1')
+      .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
+    JSON.parse(quickFix)
+    return quickFix
+  } catch {
+    // Continue with truncation repair
+  }
+
+  // Scan string to find unclosed string literals
+  let repaired = str
+  let inString = false
+  let isEscaped = false
+  for (let i = 0; i < repaired.length; i++) {
+    const ch = repaired[i]
+    if (inString) {
+      if (isEscaped) {
+        isEscaped = false
+      } else if (ch === '\\') {
+        isEscaped = true
+      } else if (ch === '"') {
+        inString = false
+      }
+    } else {
+      if (ch === '"') {
+        inString = true
+      }
+    }
+  }
+
+  if (inString) {
+    if (repaired.endsWith('\\')) {
+      repaired = repaired.slice(0, -1)
+    }
+    repaired += '"'
+  }
+
+  // Iteratively clean trailing dangling tokens and close the bracket stack
+  for (let attempt = 0; attempt < 25; attempt++) {
+    repaired = repaired.replace(/,\s*$/, '').trim()
+
+    const stack: string[] = []
+    let strOpen = false
+    let esc = false
+
+    for (let i = 0; i < repaired.length; i++) {
+      const c = repaired[i]
+      if (strOpen) {
+        if (esc) {
+          esc = false
+        } else if (c === '\\') {
+          esc = true
+        } else if (c === '"') {
+          strOpen = false
+        }
+      } else {
+        if (c === '"') {
+          strOpen = true
+        } else if (c === '{') {
+          stack.push('}')
+        } else if (c === '[') {
+          stack.push(']')
+        } else if (c === '}' || c === ']') {
+          if (stack.length > 0 && stack[stack.length - 1] === c) {
+            stack.pop()
+          }
+        }
+      }
+    }
+
+    if (strOpen) {
+      if (repaired.endsWith('\\')) repaired = repaired.slice(0, -1)
+      repaired += '"'
+      continue
+    }
+
+    const closers = stack.reverse().join('')
+    const candidate = repaired + closers
+
+    try {
+      JSON.parse(candidate)
+      return candidate
+    } catch {
+      // Remove trailing incomplete key/value or colon
+      const trimmed = repaired
+        .replace(/,\s*$/, '')
+        .replace(/:\s*$/, '')
+        .replace(/"[^"\\]*(?:\\.[^"\\]*)*"\s*$/, '')
+        .replace(/,\s*$/, '')
+        .trim()
+
+      if (trimmed === repaired || trimmed.length === 0) {
+        break
+      }
+      repaired = trimmed
+    }
+  }
+
+  return str
+}
+
+export function parseAiAnalysisJson(rawJsonText: string): AiAnalysisResult {
+  if (!rawJsonText || typeof rawJsonText !== 'string' || !rawJsonText.trim()) {
+    throw new Error('AI response was empty.')
+  }
+
+  let cleaned = extractJsonString(rawJsonText)
   let parsed: any
+
   try {
     parsed = JSON.parse(cleaned)
   } catch (err: any) {
-    // Attempt relaxed trailing comma cleanup
     try {
-      const fixed = cleaned
-        .replace(/,\s*([\]}])/g, '$1')
-        .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
-      parsed = JSON.parse(fixed)
+      const repaired = repairTruncatedJson(cleaned)
+      parsed = JSON.parse(repaired)
     } catch {
-      throw new Error(`Failed to parse AI response as JSON: ${err?.message || 'Syntax error'}`)
+      try {
+        const fixed = cleaned
+          .replace(/,\s*([\]}])/g, '$1')
+          .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":')
+        parsed = JSON.parse(fixed)
+      } catch {
+        throw new Error(`Failed to parse AI response as JSON: ${err?.message || 'Syntax error'}`)
+      }
     }
   }
 
