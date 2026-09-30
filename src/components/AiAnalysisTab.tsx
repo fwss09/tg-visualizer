@@ -45,6 +45,7 @@ import {
 
 interface AiAnalysisTabProps {
   rawExportData: TelegramExport
+  onAnalysisComplete?: (result: AiAnalysisResult) => void
 }
 
 export const GEMINI_MODELS = [
@@ -74,7 +75,7 @@ export const GEMINI_MODELS = [
   },
 ]
 
-export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) => {
+export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData, onAnalysisComplete }) => {
   const [apiKey, setApiKey] = useState<string>('')
   const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-pro')
   const [showKeyInput, setShowKeyInput] = useState<boolean>(false)
@@ -218,6 +219,7 @@ export const AiAnalysisTab: React.FC<AiAnalysisTabProps> = ({ rawExportData }) =
       }
 
       setAiResult(result)
+      onAnalysisComplete?.(result)
     } catch (err: any) {
       console.error('AI Analysis failed:', err)
       setError(err?.message || 'Failed to complete analysis. Check your API key or connection.')

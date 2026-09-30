@@ -13,11 +13,14 @@ import { ChatDynamics } from '@/components/charts/ChatDynamics'
 import { WordAndEmojiCloud } from '@/components/charts/WordAndEmojiCloud'
 import { BarChart3, Sparkles } from 'lucide-react'
 import { AiAnalysisTab } from '@/components/AiAnalysisTab'
+import { ChatDrawer } from '@/components/ChatDrawer'
 import { analyzeTelegramData } from '@/lib/analyzer'
 import type { TelegramExport } from '@/types/telegram'
+import type { AiAnalysisResult } from '@/types/ai'
 
 export function App() {
   const [rawExportData, setRawExportData] = useState<TelegramExport | null>(null)
+  const [aiAuditResult, setAiAuditResult] = useState<AiAnalysisResult | null>(null)
   const [activeTab, setActiveTab] = useState<'charts' | 'ai'>('charts')
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState('')
@@ -263,11 +266,24 @@ export function App() {
               </div>
             ) : (
               /* Tab 2: AI Analysis */
-              rawExportData && <AiAnalysisTab rawExportData={rawExportData} />
+              rawExportData && (
+                <AiAnalysisTab
+                  rawExportData={rawExportData}
+                  onAnalysisComplete={setAiAuditResult}
+                />
+              )
             )}
           </div>
         )}
       </main>
+
+      {/* Floating Interactive Chat Drawer with AI */}
+      {rawExportData && (
+        <ChatDrawer
+          rawExportData={rawExportData}
+          aiAuditResult={aiAuditResult}
+        />
+      )}
 
       {/* Footer */}
       <footer className="border-t border-border/40 py-6 text-center text-xs text-muted-foreground mt-auto">
